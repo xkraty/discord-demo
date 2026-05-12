@@ -4,8 +4,14 @@ cd "$(dirname "$0")/.."
 docker compose up -d
 echo "Chromium starting..."
 sleep 3
+
+# The cdp-proxy sidecar shares chromium's network namespace. If chromium was
+# restarted (vs first start), the sidecar's netns is stale — restart it so it
+# picks up the fresh netns and its 9223 listener becomes reachable again.
+docker restart discord-demo-cdp-proxy >/dev/null 2>&1 || true
+
 echo "noVNC web UI : http://localhost:3010  (user: admin, password from .env)"
-echo "CDP endpoint : http://localhost:9222"
+echo "CDP endpoint : http://localhost:9223"
 echo ""
 echo "Next steps:"
 echo "  1. Open http://localhost:3010 in your browser."

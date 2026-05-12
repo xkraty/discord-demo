@@ -33,6 +33,6 @@ module Browser
       page.goto("https://discord.com/channels/@me", waitUntil: "domcontentloaded")
     end
 
-    page
+    [page, context]
   end
 end

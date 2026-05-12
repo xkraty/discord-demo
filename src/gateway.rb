@@ -12,22 +12,46 @@ module Gateway
 
   # One persistent Zlib::Inflate per WebSocket connection (zlib-stream shares
   # context across frames; resetting per frame would break decompression).
-  @inflaters = {}
+  @inflaters       = {}
+  @websockets      = {}   # ws_id => ws (for closed? polling)
+  @closed_reported = {}   # ws_id => true once gateway_close recorded
 
   class << self
     def register_websocket(ws)
       ws_id = ws.object_id
-      @inflaters[ws_id] = Zlib::Inflate.new(Zlib::MAX_WBITS)
+      @inflaters[ws_id]  = Zlib::Inflate.new(Zlib::MAX_WBITS)
+      @websockets[ws_id] = ws
 
       ws.on("framereceived", ->(payload) {
         handle_frame(payload, ws_id)
       })
 
       ws.on("close", ->(*) {
-        cleanup_inflater(ws_id)
-        Log.warn("gateway_close")
-        DB.record_session_event("gateway_close", nil)
+        record_close(ws_id, "close_event")
       })
+
+      ws.on("socketerror", ->(err) {
+        Log.warn("gateway_error", error: err.to_s.slice(0, 120))
+        DB.record_session_event("gateway_error", err.to_s.slice(0, 200))
+        record_close(ws_id, "socketerror")
+      })
+    end
+
+    # Called periodically from the heartbeat loop. Catches close events that
+    # the Playwright Node bridge silently dropped (a known quirk with
+    # connect_over_cdp).
+    def check_closed_websockets
+      @websockets.each do |ws_id, ws|
+        next if @closed_reported[ws_id]
+        closed = false
+        begin
+          closed = ws.closed?
+        rescue => e
+          Log.warn("ws_closed_check_failed", ws_id: ws_id, error: e.class)
+          closed = true  # treat as closed if we can't even ask
+        end
+        record_close(ws_id, "poll_detected") if closed
+      end
     end
 
     def handle_frame(payload, ws_id)
@@ -104,6 +128,14 @@ module Gateway
     def cleanup_inflater(ws_id)
       inf = @inflaters.delete(ws_id)
       inf&.close rescue nil
+    end
+
+    def record_close(ws_id, source)
+      return if @closed_reported[ws_id]
+      @closed_reported[ws_id] = true
+      cleanup_inflater(ws_id)
+      Log.warn("gateway_close", source: source)
+      DB.record_session_event("gateway_close", source)
     end
   end
 end
