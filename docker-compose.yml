@@ -1,0 +1,36 @@
+services:
+  chromium:
+    image: lscr.io/linuxserver/chromium:latest
+    container_name: discord-demo-chromium
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Madrid
+      - CUSTOM_USER=admin
+      - PASSWORD=${CHROMIUM_PASSWORD:-changeme}
+      - CHROME_CLI=--remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --disable-features=WebRtcHideLocalIpsWithMdns --force-webrtc-ip-handling-policy=disable_non_proxied_udp --disable-blink-features=AutomationControlled
+    volumes:
+      - ./data/chromium-profile:/config
+    ports:
+      # noVNC web UI
+      - "127.0.0.1:3010:3000"
+      - "127.0.0.1:3011:3001"
+      # CDP endpoint — served by the cdp-proxy sidecar (which shares this
+      # container's network namespace and forwards 9223 -> 127.0.0.1:9222)
+      - "127.0.0.1:9223:9223"
+    shm_size: 2gb
+    restart: unless-stopped
+
+  cdp-proxy:
+    image: alpine/socat:latest
+    container_name: discord-demo-cdp-proxy
+    # Share the chromium container's network namespace so we can reach
+    # 127.0.0.1:9222 inside it (Chromium binds to loopback only, ignoring
+    # --remote-debugging-address=0.0.0.0 in this image build).
+    network_mode: "service:chromium"
+    command: -d -d TCP-LISTEN:9223,fork,reuseaddr,bind=0.0.0.0 TCP:127.0.0.1:9222
+    depends_on:
+      - chromium
+    restart: unless-stopped

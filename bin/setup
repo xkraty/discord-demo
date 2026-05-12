@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+mkdir -p data/chromium-profile data/raw-frames
+
+if [ ! -f .env ]; then
+  cp .env.example .env
+  echo "Created .env from .env.example — edit it if needed."
+fi
+
+bundle install
+
+if ! command -v playwright &>/dev/null; then
+  echo "Installing Playwright CLI via npm..."
+  npm install -g playwright
+fi
+
+docker compose pull
+
+echo ""
+echo "Setup complete."
+echo "Next: run bin/chromium-up, log in via noVNC, then: bundle exec ruby src/capture.rb"

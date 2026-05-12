@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+docker compose up -d
+echo "Chromium starting..."
+sleep 3
+echo "noVNC web UI : http://localhost:3010  (user: admin, password from .env)"
+echo "CDP endpoint : http://localhost:9222"
+echo ""
+echo "Next steps:"
+echo "  1. Open http://localhost:3010 in your browser."
+echo "  2. Navigate to https://discord.com/login and log in to your test account."
+echo "  3. Once your DM list is visible, leave the browser open (do NOT close Chromium)."
+echo "  4. Run: bundle exec ruby src/capture.rb"
