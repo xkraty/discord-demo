@@ -121,10 +121,59 @@ class CsvUpload < ApplicationRecord
   has_many :products
   # file (Active Storage), uploaded_by, processed_at, row_count, error_count
 end
+
+# Per-channel read tracking (driven by MESSAGE_ACK gateway events)
+class ChannelReadState < ApplicationRecord
+  # discord_channel_id (unique)
+  # last_read_message_id, last_read_at
+  # ack_version (monotonic counter from Discord, used to ignore stale acks)
+end
+
+# Outbound ACK queue (filled by Rails, drained by capture worker)
+class AckRequest < ApplicationRecord
+  # discord_channel_id, discord_message_id
+  # requested_at, sent_at (null until processed), error (text)
+end
 ```
 
 `raw_payload` is preserved on `DiscordMessage` for reprocessing — if the matcher
 improves, we re-run it against history without going back to Discord.
+
+### Gateway events captured in v1
+
+The demo captures only `MESSAGE_CREATE/UPDATE/DELETE`. Production expands the
+filter to two more event types that are too useful to leave on the table:
+
+| Event           | Persisted to                     | Purpose                                          |
+|-----------------|----------------------------------|--------------------------------------------------|
+| `MESSAGE_CREATE`| `DiscordMessage`                 | Inbound DM capture (core)                        |
+| `MESSAGE_UPDATE`| `DiscordMessage`                 | Seller edited their offer                        |
+| `MESSAGE_DELETE`| `DiscordMessage`                 | Seller withdrew their offer                      |
+| `MESSAGE_ACK`   | `ChannelReadState`               | Sync read state from operator's other clients    |
+| `CHANNEL_CREATE`| `DiscordMessage` (synthetic row) | First-contact DM from a new seller               |
+
+`MESSAGE_ACK` fires when ANY of the operator's connected clients (web, desktop,
+phone) reads a message in a channel. Catching it means the dashboard knows
+"this offer's DM is already read on the operator's phone" and can grey out the
+mark-as-read button. The `ack_version` field is a monotonic counter from
+Discord; we only update `ChannelReadState` when the incoming version is
+strictly greater than the stored one, which makes out-of-order delivery safe.
+
+`CHANNEL_CREATE` fires when a brand-new DM channel opens — important because
+the first-contact `MESSAGE_CREATE` lands microseconds later and we want the
+channel context already populated.
+
+**Not captured in v1** (deferred to v2 if/when they matter): `PRESENCE_UPDATE`
+(firehose; filter to known sellers only), `TYPING_START` (live "seller is
+typing" UX), `MESSAGE_REACTION_ADD/REMOVE` (detect seller acknowledging our
+reply), `CALL_CREATE` (seller voice-calling — rare enough to alert on),
+`RELATIONSHIP_ADD` (incoming friend request). Each is a separate, scoped
+addition; none are needed for the core triage flow.
+
+**Always logged to `session_events`** (not persisted as messages): `READY` /
+`READY_SUPPLEMENTAL` (handshake snapshot — useful diagnostic), `SESSIONS_REPLACE`
+(other-device login/logout — account-health signal), `GUILD_DELETE` for
+sourcing servers (we got kicked), connection close codes from the WS itself.
 
 ---
 
@@ -240,18 +289,19 @@ WS. Rails enqueues ACKs as offers are reviewed; the worker drains the queue.
   stays, and the next manual phone-open clears it. We don't retry
   aggressively.
 
-### Schema additions
+### Inbound side (read-state sync)
 
-```ruby
-class AckRequest < ApplicationRecord
-  # discord_channel_id, discord_message_id
-  # requested_at, sent_at (null until worker processes it), error (text)
-  # one row per ACK; deleted/archived after sent_at is set
-end
-```
+Mark-as-read is two-directional. The outbound path above sends ACKs; the
+inbound path receives `MESSAGE_ACK` events from Discord whenever the operator
+reads on another device, and updates `ChannelReadState`. The dashboard uses
+that table to grey out the button when there's nothing to ACK. See "Gateway
+events captured in v1" for the event-handling details.
+
+### Outbound queue mechanics
 
 Capture worker polls (or LISTEN/NOTIFY) for unprocessed `AckRequest` rows,
-calls `gateway.send_ack`, sets `sent_at`. Single-threaded, in-order.
+calls `gateway.send_ack`, sets `sent_at`. Single-threaded, in-order. See the
+`AckRequest` model in the Domain section.
 
 ### Dashboard wiring
 
@@ -284,6 +334,10 @@ Stimulus + Turbo, three views:
    (last N messages from the same `discord_channel_id`), matched product
    details, "Mark accepted" / "Dismiss" actions. Both actions enqueue an
    `AckRequest` for the channel's latest message so the unread badge clears.
+   The "Mark as read" affordance is greyed out when `ChannelReadState` shows
+   the channel is already read on another client (operator read it on their
+   phone). Solid Cable pushes a Turbo Stream when `MESSAGE_ACK` arrives so
+   the state updates live without a refresh.
    **No reply UI in v1** — operator replies in Discord manually.
 3. **CSV upload** — drag-drop, preview parsed rows, confirm, replaces today's
    open products. Soft-delete strategy so we don't lose match history.
@@ -429,10 +483,12 @@ These are explicitly *not* built in v1 even though they're tempting:
 1. Rails 8 app skeleton with Solid Trifecta and Mission Control. Verify Kamal
    deploy works on the target server with a "hello world" page.
 2. Postgres schema for `DiscordMessage`, `DiscordSessionEvent`, `Product`,
-   `Offer`, `CsvUpload`. Migration + factories + model tests.
+   `Offer`, `CsvUpload`, `ChannelReadState`, `AckRequest`. Migration +
+   factories + model tests.
 3. Port the demo's `src/` into a `capture/` directory in the Rails repo,
-   replace SQLite with Postgres via ActiveRecord. Verify it still captures
-   messages from the test account when run locally against the prod schema.
+   replace SQLite with Postgres via ActiveRecord. Expand the gateway event
+   filter to also handle `MESSAGE_ACK` (updates `ChannelReadState`) and
+   `CHANNEL_CREATE`. Verify capture still works against the prod schema.
 4. Build the Chromium + chromium-proxy (nginx) + capture Kamal accessories.
    Deploy. Verify capture survives a Rails deploy AND that `/chromium` in
    Rails opens an authenticated noVNC view.
