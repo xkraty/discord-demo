@@ -140,7 +140,10 @@ Same code as `src/capture.rb` / `src/gateway.rb`, with these changes:
    one place.
 3. Loops `kamal accessory restart capture` as the disaster-recovery primitive
    rather than `Ctrl-C`.
-4. Same passive-observer constraints: no DOM scraping, no sending, no clicking.
+4. Mostly passive: no DOM scraping, no clicking, no authored content. The
+   one non-passive operation is outbound `MESSAGE_ACK` frames for the
+   mark-as-read feature (see "Mark-as-read" section). All capture I/O
+   continues to flow over the gateway WebSocket only.
 
 The Chromium accessory keeps the same image (`lscr.io/linuxserver/chromium`) but
 the demo's `socat` cdp-proxy sidecar is replaced with an nginx sidecar
@@ -197,17 +200,91 @@ fine; running an LLM on every gateway frame would not be.
 
 ---
 
+## Mark-as-read (v1 — housekeeping only)
+
+The operator triages offers through the Rails dashboard. They need a way to
+clear the corresponding Discord unread badges from inside Rails, so the
+notification state stays consistent with what they've actually reviewed.
+
+**This is housekeeping, not outbound action.** It's distinct from auto-reply
+(which is explicitly out of scope for v1) — we're not sending content on the
+operator's behalf, we're just clearing their own unread counters. Discord
+treats ACK as a normal client operation; every official client does it
+constantly. It does not change the account's risk profile in any meaningful
+way.
+
+### How it works
+
+Discord's gateway WebSocket isn't only a read channel — the same connection
+the capture worker holds open is also the channel the web client uses to send
+`MESSAGE_ACK` operations. Playwright's `WebSocket` object exposes a `send`
+method for outbound frames.
+
+```ruby
+# rough shape, exact opcode/payload from Discord's documented gateway protocol
+gateway.send_ack(channel_id: ..., message_id: ...)
+```
+
+The capture worker grows one new public surface: a Postgres-backed queue of
+ACK requests that it processes by sending frames out on the existing gateway
+WS. Rails enqueues ACKs as offers are reviewed; the worker drains the queue.
+
+### Why this stays safe
+
+- Same WebSocket connection Discord's web client uses; same opcode the client
+  emits when you read a message.
+- Rate-limited identically to what a real user would do (we don't ACK in a
+  hot loop — we ACK as the operator reviews, ~10s/click).
+- No content authored. ACK frames carry only IDs.
+- Failure mode is benign: if the ACK frame is dropped, the unread badge
+  stays, and the next manual phone-open clears it. We don't retry
+  aggressively.
+
+### Schema additions
+
+```ruby
+class AckRequest < ApplicationRecord
+  # discord_channel_id, discord_message_id
+  # requested_at, sent_at (null until worker processes it), error (text)
+  # one row per ACK; deleted/archived after sent_at is set
+end
+```
+
+Capture worker polls (or LISTEN/NOTIFY) for unprocessed `AckRequest` rows,
+calls `gateway.send_ack`, sets `sent_at`. Single-threaded, in-order.
+
+### Dashboard wiring
+
+The "Mark accepted" and "Dismiss" actions on the offer detail view enqueue
+an `AckRequest` for the last N messages in that DM channel from that seller.
+"Mark all read" is a separate explicit action on the inbox header.
+
+### Failure modes
+
+- **Worker WS is down** when an ACK is requested: `AckRequest` rows pile up
+  in the queue and drain when the gateway reconnects. Acceptable.
+- **Ack frame format changes** on Discord's side: ACKs fail silently
+  (`error` column populated). Operator sees unread badges not clearing,
+  reports it, we fix the frame shape. Low blast radius.
+- **Operator clicks 100 things at once**: we ACK with a small delay between
+  frames (e.g. 200ms) to look like a real user moving through messages.
+
+---
+
 ## Dashboard (v1 scope)
 
 Stimulus + Turbo, three views:
 
 1. **Inbox** — list of recent `Offer` rows, default sort by `created_at` desc.
    Each row shows: seller username, message preview, matched product + size +
-   target price, confidence badge. Click → detail view.
+   target price, confidence badge. Click → detail view. Header has a
+   "Mark all reviewed as read" action that enqueues ACKs for every offer the
+   operator has dismissed or accepted but Discord still shows as unread.
 2. **Offer detail** — full DM thread for that seller in that channel
    (last N messages from the same `discord_channel_id`), matched product
-   details, "Mark accepted" / "Dismiss" actions. **No reply UI in v1** —
-   operator replies in Discord manually.
+   details, "Mark accepted" / "Dismiss" actions. Both actions enqueue an
+   `AckRequest` for the channel's latest message so the unread badge clears.
+   **No reply UI in v1** — operator replies in Discord manually.
 3. **CSV upload** — drag-drop, preview parsed rows, confirm, replaces today's
    open products. Soft-delete strategy so we don't lose match history.
 
@@ -331,6 +408,9 @@ profile the capture worker points at. No code changes.
 These are explicitly *not* built in v1 even though they're tempting:
 
 - Auto-replies (deferred to v2 after matching is trusted for 30+ days).
+  Note: this is distinct from mark-as-read, which IS in v1. Auto-replies
+  author content on the operator's behalf; mark-as-read just clears unread
+  counters for messages the operator has already triaged.
 - Multi-account capture (one Discord account per deployment).
 - Mobile dashboard (operator works from a laptop).
 - Slack/email notifications (alerts go to a dedicated Discord channel, dogfooding the same medium the business runs on).
@@ -361,9 +441,12 @@ These are explicitly *not* built in v1 even though they're tempting:
 6. `MatcherService` interface + first implementation (probably
    `LlmMatcher` for simplicity). Wire it into `MatchOfferJob`.
 7. Offer detail view with thread context + accept/dismiss actions.
-8. Capture health endpoint + Discord-webhook alerts.
-9. Operator dogfoods for a week with real CSV data. Iterate matcher accuracy.
-10. Daily-driver migration (if metrics support it).
+8. `AckRequest` model + capture worker outbound path (`gateway.send_ack`) +
+   wire dashboard actions to enqueue ACKs. Verify a clicked "Dismiss" clears
+   the unread badge on the operator's phone within a few seconds.
+9. Capture health endpoint + Discord-webhook alerts.
+10. Operator dogfoods for a week with real CSV data. Iterate matcher accuracy.
+11. Daily-driver migration (if metrics support it).
 
 Each step is a deployable increment.
 
