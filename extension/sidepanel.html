@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Discord DM Capture</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header>
+    <div class="row">
+      <span class="dot" id="conn-dot"></span>
+      <strong>Discord DM Capture</strong>
+      <span class="muted" id="ext-version"></span>
+    </div>
+    <div class="status row">
+      <span class="chip" title="Open gateways">GW <b id="s-gateways">0</b></span>
+      <span class="chip" title="Frames seen">F <b id="s-frames">0</b></span>
+      <span class="chip" title="Queue depth">Q <b id="s-queue">0</b></span>
+      <span class="chip" title="Successful Rails flushes">↑ <b id="s-flushes">0</b></span>
+      <span class="chip" title="Time since last frame" id="s-last-frame">—</span>
+    </div>
+  </header>
+
+  <nav class="filters">
+    <label><input type="checkbox" id="f-dm" checked> DM only</label>
+    <label><input type="checkbox" id="f-dispatched" checked> Captured only</label>
+    <label><input type="checkbox" id="f-paused"> Pause</label>
+    <button id="btn-clear">Clear</button>
+  </nav>
+
+  <main id="feed" aria-live="polite"></main>
+
+  <footer>
+    <details>
+      <summary>Config &amp; diagnostics</summary>
+      <div class="config">
+        <label>
+          API key
+          <input type="password" id="api-key" placeholder="capture_api_key from Rails" autocomplete="off">
+        </label>
+        <button id="save-key">Save</button>
+        <div class="row">
+          <button id="flush-now">Flush now</button>
+          <button id="selftest-ingest">Self-test ingest</button>
+          <button id="hook-test">Hook test</button>
+        </div>
+        <div class="muted small">
+          <div>Ingest URL: <code id="cfg-ingest">—</code></div>
+          <div>Profile: <code id="cfg-profile">—</code></div>
+          <div>Last error: <span class="err" id="cfg-error">—</span></div>
+          <div id="cfg-diag-result"></div>
+        </div>
+      </div>
+    </details>
+  </footer>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

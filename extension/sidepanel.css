@@ -1,0 +1,190 @@
+:root {
+  color-scheme: light dark;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  --fg: #1f2024;
+  --muted: #6b6f76;
+  --bg: #ffffff;
+  --line: #e5e7eb;
+  --line-soft: #f1f3f5;
+  --err: #b91c1c;
+  --ok: #047857;
+  --warn: #b45309;
+  --accent: #5865f2;
+  --chip-bg: #eef0fb;
+  --chip-fg: #303547;
+  --hover: #f6f7fb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e5e7eb;
+    --muted: #9ca3af;
+    --bg: #0f1116;
+    --line: #232732;
+    --line-soft: #1a1d24;
+    --err: #fca5a5;
+    --ok: #6ee7b7;
+    --warn: #fbbf24;
+    --chip-bg: #1f2330;
+    --chip-fg: #cbd5e1;
+    --hover: #181b22;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+header {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.row { display: flex; align-items: center; gap: 6px; }
+.dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--muted);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.dot.ok   { background: var(--ok); }
+.dot.warn { background: var(--warn); }
+.dot.err  { background: var(--err); }
+.muted { color: var(--muted); }
+.small { font-size: 11px; }
+.err { color: var(--err); }
+.ok  { color: var(--ok); }
+
+.status { margin-top: 6px; flex-wrap: wrap; }
+.chip {
+  background: var(--chip-bg);
+  color: var(--chip-fg);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.chip b { font-weight: 600; }
+
+nav.filters {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+nav.filters label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+nav.filters button {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+nav.filters button:hover { background: var(--hover); }
+
+main {
+  flex: 1 1 0;
+  overflow-y: auto;
+  padding: 0;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+}
+
+.item {
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.item .ts { color: var(--muted); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.item .t {
+  flex-shrink: 0;
+  font-weight: 600;
+  min-width: 96px;
+}
+.item .body { flex: 1 1 0; word-break: break-word; }
+.item .author { color: var(--accent); font-weight: 600; }
+
+.item.message_create { }
+.item.message_update { color: var(--warn); }
+.item.message_delete { color: var(--err); }
+.item.message_ack    { color: var(--ok); }
+.item.session        { background: var(--line-soft); }
+.item.session .t     { color: var(--muted); }
+.item.dropped        { opacity: 0.55; }
+.item.selftest       { background: rgba(88, 101, 242, 0.10); }
+.item.raw            { color: var(--err); }
+
+footer {
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
+  background: var(--bg);
+}
+footer details { padding: 6px 10px; }
+footer summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--muted);
+  user-select: none;
+}
+footer summary:hover { color: var(--fg); }
+
+.config { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.config label {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.config input[type='password'] {
+  padding: 4px 6px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 12px;
+}
+.config button {
+  align-self: flex-start;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--accent);
+  color: white;
+  font-size: 11px;
+  cursor: pointer;
+}
+.config button + button, .config .row button {
+  background: transparent;
+  color: var(--fg);
+}
+.config code {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  background: rgba(127, 127, 127, 0.12);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+/* In viewer-only mode (no Rails ingest), hide the API key form and the
+   ingest-only diagnostic buttons. The hook-test button stays useful. */
+body.viewer-only .config label,
+body.viewer-only #save-key,
+body.viewer-only #flush-now,
+body.viewer-only #selftest-ingest { display: none; }
