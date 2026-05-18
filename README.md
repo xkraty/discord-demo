@@ -1,240 +1,219 @@
-# Discord DM Capture Demo
+# Discord DM Capture
 
-Passively captures Discord DMs to a local SQLite database via Discord's gateway
-WebSocket. No messages are sent, no DMs are opened, read state is preserved.
+Captures inbound Discord DMs to a real-time dashboard, via a Chrome
+extension + a Rails 8 app deployed with Kamal.
 
----
+For the project spec (architecture, models, wire format, auth model)
+see [CLAUDE.md](CLAUDE.md). For the longer-horizon roadmap (AI matcher,
+CSV upload, mark-as-read), see [PRODUCTION_PLAN.md](PRODUCTION_PLAN.md).
+This README is the operator runbook.
 
-## Prerequisites
+## Quickstart — local dev
 
-- macOS with [mise](https://mise.jdx.dev/) installed
-- Ruby ≥ 3.2 via mise: `mise use ruby@latest`
-- Node.js via mise (needed for Playwright CLI): `mise use node@lts`
-- Docker Desktop running
-
----
-
-## First-time setup
+Prereqs: Ruby 3.2+ (4.0.1 used here), Postgres 14+, Docker (optional —
+only if you run Postgres in a container).
 
 ```bash
-bin/setup
+# 1. clone
+git clone <your-fork> discord-demo && cd discord-demo
+
+# 2. install gems
+bundle install
+
+# 3. credentials — generate fresh capture_api_key + basic auth
+EDITOR=vim bin/rails credentials:edit
+# add:
+#   capture_api_key: <random 48+ chars>
+#   basic_auth:
+#     user: admin
+#     pass: <random>
+
+# 4. databases
+# Set DB env vars if your Postgres isn't on localhost / pguser:
+#   export DB_HOST=localhost DB_USERNAME=pguser
+bin/rails db:create
+bin/rails db:migrate
+bin/rails db:schema:load:cache db:schema:load:queue db:schema:load:cable
+
+# 5. boot
+bin/rails server -p 3000
 ```
 
-This will:
-- Create `data/` directories
-- Copy `.env.example` → `.env`
-- Run `bundle install`
-- Install the Playwright CLI (`npm install -g playwright`) if missing
-- Pull the Chromium Docker image
+Visit http://localhost:3000 and authenticate with the basic_auth
+credentials you set. The feed will be empty until the extension sends
+events.
 
-Edit `.env` if you want a custom noVNC password:
-```
-CHROMIUM_CDP_URL=http://localhost:9223
-CHROMIUM_PASSWORD=changeme
-```
+### Wire up the Chrome extension
 
----
+1. Open `extension/background.js`. Set:
+   ```js
+   const INGEST_URL = "http://localhost:3000/capture/ingest";
+   const COMMAND_URL = null;     // mark-as-read not in v1
+   ```
+2. (Optional — the bundle has pako pre-built. If you ever edit
+   `inject.js`, run `extension/build.sh` to rebuild
+   `inject.bundle.js`.)
+3. Open `chrome://extensions` → Developer mode ON → **Load unpacked** →
+   select the `extension/` directory.
+4. Click the extension icon → side panel opens.
+5. Paste your `capture_api_key` into the API key field → **Save**.
+6. Open https://discord.com/channels/@me in another tab — you should
+   already be logged in. The side panel's status row turns green.
+7. Send/receive a DM; it appears in the side panel feed AND in the
+   Rails dashboard at http://localhost:3000.
 
-## Login
-
-Start Chromium in Docker:
+### Sanity-check the ingest endpoint with curl
 
 ```bash
-bin/chromium-up
+# Set this once
+export KEY=<your capture_api_key>
+
+# Empty batch → 200 {accepted: 0}
+curl -sS -X POST http://localhost:3000/capture/ingest \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"batch_id":"t1","events":[]}'
+
+# Synthetic DM → 200 {accepted: 1}, row in DB, broadcast fires
+curl -sS -X POST http://localhost:3000/capture/ingest \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"batch_id":"t2","events":[{"kind":"gateway_frame","ws_id":1,
+       "received_at":"2026-01-01T00:00:00Z",
+       "frame":{"op":0,"t":"MESSAGE_CREATE","s":1,
+                "d":{"id":"smoke-1","channel_id":"ch-1",
+                     "content":"hi","timestamp":"2026-01-01T00:00:00Z",
+                     "author":{"id":"a-1","username":"u","global_name":"User"}}}}]}'
 ```
 
-Then:
+## Deploy to VPS (Kamal 2)
 
-1. Open **http://localhost:3010** in your browser (noVNC web UI)
-2. Navigate to **https://discord.com/login** inside noVNC
-3. Log in to your **test account** (not your daily driver)
-4. Wait until your DM list is visible
-5. Leave Chromium running — do not close the container
+Prereqs:
+- A VPS you can SSH into as `root` (or set `ssh.user` in
+  `config/deploy.yml`)
+- A domain pointing at it (`<YOUR_DOMAIN> → <YOUR_SERVER_IP>` A record)
+- A GitHub account (image lives at ghcr.io)
+- Docker installed on your **local** machine (Kamal builds locally,
+  pushes to ghcr.io, pulls on the server)
 
-Your session is persisted in `data/chromium-profile/`. Back this directory up after
-a successful first login so you don't have to log in again if you reset Docker.
-
----
-
-## Running the capture
+### One-time setup
 
 ```bash
-bundle exec ruby src/capture.rb
+# 1. DNS — confirm it resolves
+dig +short <YOUR_DOMAIN>     # should print <YOUR_SERVER_IP>
+
+# 2. ghcr.io PAT
+# Create a classic token with scopes: write:packages, read:packages
+# at https://github.com/settings/tokens
+mkdir -p ~/.kamal && chmod 700 ~/.kamal
+echo "ghp_xxx..." > ~/.kamal/ghcr-token
+chmod 600 ~/.kamal/ghcr-token
+
+# 3. Postgres password
+openssl rand -hex 32 > ~/.kamal/discord-demo-pg-password
+chmod 600 ~/.kamal/discord-demo-pg-password
+
+# 4. Edit config/deploy.yml:
+#    - replace <github-username> with your GitHub user/org
+#    - replace sneaker.campoli.me (twice) with your domain if different
+#    - confirm servers.web has the right hostname
 ```
 
-Normal startup output:
-
-```
-[2026-05-12T10:00:00Z] [INFO] capture_start
-[2026-05-12T10:00:01Z] [INFO] browser_connect cdp_url=http://localhost:9223
-[2026-05-12T10:00:02Z] [INFO] browser_ready url=https://discord.com/channels/@me
-[2026-05-12T10:00:02Z] [INFO] browser_reload reason=reattach_gateway_ws
-[2026-05-12T10:00:04Z] [INFO] gateway_open url=wss://gateway.discord.gg/...
-[2026-05-12T10:00:04Z] [INFO] listening note=waiting_for_gateway_frames
-[2026-05-12T10:00:34Z] [INFO] heartbeat
-```
-
-When a DM arrives:
-
-```
-[2026-05-12T10:01:05Z] [INFO] MESSAGE_CREATE message_id=... channel_id=... author=alice preview="hey got a pair for you"
-```
-
-Stop with **Ctrl-C**. The script traps `INT`/`TERM` and shuts down cleanly.
-
----
-
-## Inspecting captured data
+### First deploy
 
 ```bash
-bin/inspect
+kamal setup
 ```
 
-Or query directly:
+This SSHes in, installs Docker if needed, boots the kamal-proxy, pulls
+the Postgres accessory, builds + pushes the Rails image, runs the
+container with `db:prepare` on boot. Lets-Encrypt cert provisioning
+happens automatically.
+
+**One-off after first setup:** create the three side databases that
+Solid Trifecta uses. Rails won't auto-create them.
 
 ```bash
-# All captured DMs
-sqlite3 -header -column data/messages.sqlite3 \
-  "SELECT captured_at, author_username, content FROM messages WHERE is_dm=1 ORDER BY id DESC LIMIT 20;"
+kamal accessory exec db --reuse \
+  "psql -U discord_demo -d discord_demo_production -c \
+   'CREATE DATABASE discord_demo_production_cache; \
+    CREATE DATABASE discord_demo_production_queue; \
+    CREATE DATABASE discord_demo_production_cable;'"
 
-# Raw payload for a specific message
-sqlite3 data/messages.sqlite3 \
-  "SELECT raw_payload FROM messages WHERE discord_message_id='<id>';"
-
-# Gateway reconnect count
-sqlite3 data/messages.sqlite3 \
-  "SELECT COUNT(*) FROM session_events WHERE event='gateway_close';"
+kamal deploy   # re-run so db:prepare loads cable/cache/queue schemas
 ```
 
----
-
-## Stopping
+### Subsequent deploys
 
 ```bash
-# Stop capture script
-Ctrl-C
-
-# Stop Chromium container (login session is preserved in data/chromium-profile/)
-bin/chromium-down
+git push                # commit your changes
+kamal deploy            # builds, pushes, rolls
+kamal app logs -f       # tail
 ```
 
----
+### Connect the extension to prod
+
+1. Edit `extension/manifest.json` `host_permissions`: add
+   `"https://<YOUR_DOMAIN>/*"` and remove the `webhook.site` /
+   `localhost` entries you don't need anymore. Chrome blocks
+   cross-origin POSTs to hosts not in this list (CORS preflight).
+2. Edit `extension/background.js`:
+   ```js
+   const INGEST_URL = "https://<YOUR_DOMAIN>/capture/ingest";
+   ```
+3. `chrome://extensions` → reload the extension. Re-open the side
+   panel and confirm the new ingest URL appears.
+
+### Monitor
+
+```bash
+kamal app logs -f             # live tail of the web container
+kamal logs -r db              # postgres logs
+kamal app exec -i "bin/rails console"
+kamal app exec -i "bin/rails dbconsole"
+```
+
+Dashboard URL: `https://<YOUR_DOMAIN>` — basic auth prompt → live feed.
+
+### Rotating the capture API key
+
+```bash
+EDITOR=vim bin/rails credentials:edit   # change capture_api_key
+git add config/credentials.yml.enc && git commit -m "Rotate capture_api_key"
+kamal deploy
+# In Chrome: open side panel → paste new key → Save
+```
+
+### Backup the database
+
+```bash
+kamal accessory exec db --reuse "pg_dump -U discord_demo discord_demo_production" \
+  > backup-$(date +%F).sql
+```
 
 ## Troubleshooting
 
-**CDP not reachable (`browser_connect` hangs or errors)**
+**`kamal setup` fails on Let's Encrypt** — DNS hasn't propagated yet,
+or `<YOUR_DOMAIN>` isn't resolving to the server. Fix DNS, then
+`kamal proxy reboot`.
 
+**Dashboard shows no DMs but the extension's side panel does** — check
+SW logs in `chrome://extensions` → service worker → console. Common
+causes: ingest URL not added to `host_permissions` (CORS preflight
+blocks the POST), wrong API key, server unreachable.
+
+**Ingest POSTs return 401** — `capture_api_key` mismatch. Verify with
+`bin/rails runner 'puts Rails.application.credentials.capture_api_key'`.
+
+**Realtime broadcasts don't reach the browser in prod** — check Solid
+Cable is running and `solid_cable_messages` in the cable DB has rows:
 ```bash
-curl http://localhost:9223/json/version
+kamal accessory exec db --reuse \
+  "psql -U discord_demo -d discord_demo_production_cable \
+   -c 'SELECT count(*) FROM solid_cable_messages;'"
 ```
 
-Should return a JSON blob with `webSocketDebuggerUrl`. If you get "Empty reply from
-server" or a hang, check both containers are up:
-
-```bash
-docker ps --filter name=discord-demo
-```
-
-You should see `discord-demo-chromium` and `discord-demo-cdp-proxy` both running.
-The proxy container shares Chromium's network namespace and forwards traffic from
-`9223` to Chromium's `127.0.0.1:9222` (Chromium ignores
-`--remote-debugging-address=0.0.0.0` in this image build and only listens on
-loopback inside the container, which is why the proxy is necessary). Check the
-proxy logs:
-
-```bash
-docker logs discord-demo-cdp-proxy
-```
-
-If Chromium itself isn't responding, inspect from inside the container:
-
-```bash
-docker exec discord-demo-chromium curl -s http://localhost:9222/json/version
-```
-
-If that returns nothing, Chromium hasn't started yet — wait 10 seconds and retry,
-or check `docker logs discord-demo-chromium`.
-
-**Discord shows login page every time**
-
-The session cookie in `data/chromium-profile/` may be expired or corrupted. Delete
-the directory, re-run `bin/chromium-up`, and log in again:
-
-```bash
-rm -rf data/chromium-profile
-bin/chromium-up
-```
-
-**Frames going to `data/raw-frames/` instead of the database**
-
-Discord sent zlib-compressed frames. The capture script attempts decompression; if
-it fails, raw bytes land in `data/raw-frames/YYYY-MM-DD.bin`. Check the `WARN`
-lines in the terminal for `frame_decompress_failed`. The first two bytes of a frame
-identify the codec: `0x78 0x9C` = zlib (handled), `0x1F 0x8B` = gzip (not yet
-handled), anything else = raw deflate. File an issue or extend `gateway.rb`
-accordingly.
-
-**`playwright CLI not found` or Playwright errors at startup**
-
-```bash
-npm install -g playwright
-```
-
-If using mise for Node, ensure shims are active: `mise reshim`. You can also set the
-path explicitly in `src/capture.rb`:
-
-```ruby
-playwright_cli_executable_path: "#{ENV['HOME']}/.local/share/mise/installs/node/lts/bin/playwright"
-```
-
-**No `gateway_open` log after startup**
-
-The page reload should force a new gateway connection. If you still don't see it
-within 10 seconds, manually reload Discord inside the noVNC browser — this triggers
-a new WebSocket that the listener will catch.
-
----
-
-## What to watch for (validation checklist)
-
-After 24–48 hours, check these from the SQLite data and `data/raw-frames/`:
-
-1. **JSON or zlib?** If `data/raw-frames/` files are empty, frames parsed as JSON
-   directly. If they have content, zlib was used (check `WARN` logs).
-2. **Every DM captured?** Have a friend send a known sequence. Verify all appear
-   with the correct `discord_message_id`.
-3. **Gateway reconnects?** `SELECT COUNT(*) FROM session_events WHERE event='gateway_close';`
-   Multiple per hour is a problem; once or twice a day is normal.
-4. **Other event types?** Add debug logging in `gateway.rb` `dispatch` for `t`
-   values outside the known set to discover events worth handling later.
-5. **Edits and deletes?** Edit and delete a test message; confirm both appear as
-   separate rows (`MESSAGE_UPDATE`, `MESSAGE_DELETE`).
-6. **Real message shape?** Pull a sample row: `SELECT raw_payload FROM messages LIMIT 1;`
-   This is the payload the future parser will operate on.
-7. **Script uptime?** Check the gap between the most recent `heartbeat` in
-   `session_events` and now. A large gap means the script crashed or froze.
-
----
-
-## Architecture notes
-
-- **Why CDP instead of a bot token?** The operator's use case involves a user
-  account, not a bot. Discord's gateway events for user accounts are only accessible
-  via the web client's WebSocket.
-- **Why WebSocket hooks instead of DOM scraping?** Selectors change with Discord
-  deploys; WebSocket frames are stable. DOM scraping would also require navigating
-  into DMs, which would mark them as read.
-- **Why SQLite?** Single-file, zero infrastructure, trivially inspectable with the
-  `sqlite3` CLI. Plenty fast for the demo's write rate.
-- **Why a page reload at startup?** Playwright's `page.on("websocket")` only fires
-  for WebSockets opened after the listener is registered. Discord's gateway
-  connection is already open when the script attaches. The reload forces a reconnect
-  that fires the listener. This adds ~2 seconds to startup.
-- **Why the `cdp-proxy` sidecar container?** The `lscr.io/linuxserver/chromium`
-  image builds Chromium in a way that ignores `--remote-debugging-address=0.0.0.0`
-  and binds the CDP server to `127.0.0.1` inside the container. Docker port
-  forwarding hits the container's `eth0`, which Chromium isn't listening on, so
-  CDP connections from the host fail. The sidecar shares Chromium's network
-  namespace (`network_mode: "service:chromium"`) and forwards `0.0.0.0:9223` →
-  `127.0.0.1:9222`, giving the host a reachable CDP endpoint without changing
-  Chromium's flags.
+**MV3 service worker keeps dying** — extension uses a long-lived port
++ alarms to keep itself alive while a Discord tab is open. If you see
+gaps in capture, look for `bridge_disconnected` lines in the SW
+console.

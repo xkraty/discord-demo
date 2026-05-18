@@ -1,0 +1,50 @@
+# PostgreSQL. Versions 9.5 and up are supported.
+
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  host: <%= ENV.fetch("DB_HOST", "localhost") %>
+  port: <%= ENV.fetch("DB_PORT", 5432) %>
+  username: <%= ENV.fetch("DB_USERNAME", "pguser") %>
+  password: <%= ENV.fetch("DB_PASSWORD", "") %>
+
+development:
+  primary:
+    <<: *default
+    database: discord_demo_development
+  cache:
+    <<: *default
+    database: discord_demo_development_cache
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *default
+    database: discord_demo_development_queue
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *default
+    database: discord_demo_development_cable
+    migrations_paths: db/cable_migrate
+
+test:
+  <<: *default
+  database: discord_demo_test
+
+production:
+  primary: &primary_production
+    <<: *default
+    database: discord_demo_production
+    username: <%= ENV.fetch("DB_USERNAME", "discord_demo") %>
+    password: <%= ENV["POSTGRES_PASSWORD"] %>
+  cache:
+    <<: *primary_production
+    database: discord_demo_production_cache
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *primary_production
+    database: discord_demo_production_queue
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *primary_production
+    database: discord_demo_production_cable
+    migrations_paths: db/cable_migrate

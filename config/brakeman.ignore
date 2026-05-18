@@ -1,0 +1,93 @@
+{
+  "ignored_warnings": [
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "1989a3ae7f05a91607989c8e140981278d456ada53fbdb7de886b18606e800cc",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped model attribute",
+      "file": "app/views/discord_messages/_discord_message.html.erb",
+      "line": 36,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "(\"#msg-#{DiscordMessage.new.reply_context.message_id}\" or nil).inspect",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "DashboardController",
+          "method": "show",
+          "line": 9,
+          "file": "app/controllers/dashboard_controller.rb",
+          "rendered": {
+            "name": "dashboard/show",
+            "file": "app/views/dashboard/show.html.erb"
+          }
+        },
+        {
+          "type": "template",
+          "name": "dashboard/show",
+          "line": 52,
+          "file": "app/views/dashboard/show.html.erb",
+          "rendered": {
+            "name": "discord_messages/_discord_message",
+            "file": "app/views/discord_messages/_discord_message.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "discord_messages/_discord_message"
+      },
+      "user_input": "DiscordMessage.new.reply_context",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": ""
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "5d5e82b7a47b927ddda98c4fcc1d8e5e3f908d5eebf3f3080a4d5e808b9c8a9c",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped model attribute",
+      "file": "app/views/channel_threads/_thread_message.html.erb",
+      "line": 18,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "(\"#thread-msg-#{DiscordMessage.new.reply_context.message_id}\" or nil).inspect",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "ChannelThreadsController",
+          "method": "show",
+          "line": 23,
+          "file": "app/controllers/channel_threads_controller.rb",
+          "rendered": {
+            "name": "channel_threads/show",
+            "file": "app/views/channel_threads/show.html.erb"
+          }
+        },
+        {
+          "type": "template",
+          "name": "channel_threads/show",
+          "line": 34,
+          "file": "app/views/channel_threads/show.html.erb",
+          "rendered": {
+            "name": "channel_threads/_thread_message",
+            "file": "app/views/channel_threads/_thread_message.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "channel_threads/_thread_message"
+      },
+      "user_input": "DiscordMessage.new.reply_context",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": ""
+    }
+  ],
+  "brakeman_version": "8.0.4"
+}

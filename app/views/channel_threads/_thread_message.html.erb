@@ -1,0 +1,141 @@
+<%# Compact message bubble used inside the drawer. Same content
+    sources as discord_messages/_discord_message but a tighter layout —
+    inline timestamp, no channel chip (everything in the drawer is the
+    same channel by definition). %>
+<article id="thread-msg-<%= message.discord_message_id %>"
+         class="flex gap-3 text-sm scroll-mt-4">
+  <div class="text-xs text-slate-400 font-mono tabular-nums shrink-0 w-12 pt-0.5">
+    <time datetime="<%= message.captured_at.iso8601 %>" title="<%= message.captured_at.iso8601 %>">
+      <%= message.captured_at.strftime("%H:%M") %>
+    </time>
+  </div>
+
+  <div class="flex-1 min-w-0">
+    <%# Reply hook stays the same — short, anchors to the original. %>
+    <% if (reply = message.reply_context) %>
+      <% reply_anchor = reply.message_id ? "#thread-msg-#{reply.message_id}" : nil %>
+      <a class="block mb-0.5 text-xs text-slate-500 hover:text-slate-700 truncate"
+         <%= "href=#{reply_anchor.inspect}".html_safe if reply_anchor %>>
+        <span class="inline-block align-middle text-slate-400 mr-1">↳</span>
+        <span class="font-medium text-slate-600">@<%= reply.author_display %></span><%
+        %><% if reply.content.present? %><span class="text-slate-500">:
+          <%= message.rendered_reply_content(truncate(reply.content.tr("\n", " "), length: 120)) %></span>
+        <% elsif reply.has_attachments? %><span class="italic text-slate-400 ml-1">(attachment)</span>
+        <% end %>
+      </a>
+    <% end %>
+
+    <div class="flex items-baseline gap-2 mb-0.5">
+      <span class="font-medium text-slate-900">
+        <%= message.author_display_name.presence || message.author_username.presence || "(unknown)" %>
+      </span>
+      <% if message.author_username.present? && message.author_username != message.author_display_name %>
+        <span class="text-xs text-slate-400">@<%= message.author_username %></span>
+      <% end %>
+    </div>
+
+    <% if message.content.present? %>
+      <div class="text-slate-700 whitespace-pre-wrap break-words">
+        <%= message.rendered_content %>
+      </div>
+    <% elsif !message.renderable_body? %>
+      <div class="text-xs text-slate-400 italic">(no content)</div>
+    <% end %>
+
+    <%# Attachments: images inline, files as small pills %>
+    <% if message.attachments.any? %>
+      <div class="mt-1.5 flex flex-wrap gap-2">
+        <% message.attachments.each do |att| %>
+          <% if att.image? && att.url.present? %>
+            <a href="<%= att.url %>" target="_blank" rel="noopener noreferrer"
+               class="block shrink-0 overflow-hidden rounded border border-slate-200 bg-slate-50">
+              <img src="<%= att.url %>" alt="<%= att.filename %>" loading="lazy"
+                   class="max-h-56 max-w-full object-contain block">
+            </a>
+          <% else %>
+            <a href="<%= att.url %>" target="_blank" rel="noopener noreferrer"
+               class="inline-flex items-center gap-2 px-2 py-1 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs">
+              <span aria-hidden="true">📎</span>
+              <span class="font-medium"><%= att.filename %></span>
+              <% if att.human_size %>
+                <span class="text-slate-400">(<%= att.human_size %>)</span>
+              <% end %>
+            </a>
+          <% end %>
+        <% end %>
+      </div>
+    <% end %>
+
+    <% if message.stickers.any? %>
+      <div class="mt-1.5 flex flex-wrap gap-2">
+        <% message.stickers.each do |s| %>
+          <% if s.renderable_as_image? %>
+            <img src="<%= s.url %>" alt="sticker: <%= s.name %>" title="<%= s.name %>"
+                 loading="lazy" class="w-20 h-20 object-contain">
+          <% else %>
+            <span class="text-xs text-slate-400 italic">(sticker: <%= s.name %>)</span>
+          <% end %>
+        <% end %>
+      </div>
+    <% end %>
+
+    <% if (visible_embeds = message.embeds.select(&:any_content?)).any? %>
+      <div class="mt-1.5 flex flex-col gap-2">
+        <% visible_embeds.each do |embed| %>
+          <div class="rounded border border-slate-200 bg-slate-50 overflow-hidden"
+               style="<%= "border-left: 3px solid #{embed.color_hex};" if embed.color_hex %>">
+            <div class="p-2.5 flex gap-3">
+              <div class="flex-1 min-w-0">
+                <% if embed.author_name.present? %>
+                  <div class="text-xs text-slate-500 mb-1"><%= embed.author_name %></div>
+                <% end %>
+                <% if embed.title.present? %>
+                  <div class="font-medium text-slate-900 mb-1">
+                    <% if embed.url.present? %>
+                      <a href="<%= embed.url %>" target="_blank" rel="noopener noreferrer"
+                         class="text-blue-700 hover:underline"><%= embed.title %></a>
+                    <% else %>
+                      <%= embed.title %>
+                    <% end %>
+                  </div>
+                <% end %>
+                <% if embed.description.present? %>
+                  <div class="text-xs text-slate-700 whitespace-pre-wrap break-words mb-1">
+                    <%= truncate(embed.description, length: 500) %>
+                  </div>
+                <% end %>
+                <% if embed.fields.any? %>
+                  <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                    <% embed.fields.each do |field| %>
+                      <div class="<%= field.inline ? 'min-w-[6rem]' : 'basis-full' %>">
+                        <div class="font-semibold text-slate-800"><%= field.name %></div>
+                        <div class="text-slate-700 whitespace-pre-wrap break-words"><%= field.value %></div>
+                      </div>
+                    <% end %>
+                  </div>
+                <% end %>
+                <% if embed.image_url.present? %>
+                  <a href="<%= embed.image_url %>" target="_blank" rel="noopener noreferrer"
+                     class="block mt-1.5 overflow-hidden rounded border border-slate-200">
+                    <img src="<%= embed.image_url %>" alt="" loading="lazy"
+                         class="max-h-56 max-w-full object-contain block">
+                  </a>
+                <% end %>
+                <% if embed.footer_text.present? %>
+                  <div class="text-xs text-slate-400 mt-1.5"><%= embed.footer_text %></div>
+                <% end %>
+              </div>
+              <% if embed.thumbnail_url.present? %>
+                <a href="<%= embed.thumbnail_url %>" target="_blank" rel="noopener noreferrer"
+                   class="shrink-0 overflow-hidden rounded border border-slate-200 bg-white">
+                  <img src="<%= embed.thumbnail_url %>" alt="" loading="lazy"
+                       class="w-14 h-14 object-cover block">
+                </a>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+</article>

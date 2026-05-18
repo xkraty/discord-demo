@@ -1,0 +1,64 @@
+service: discord_demo
+
+image: xkraty/discord_demo
+
+servers:
+  web:
+    - sneaker.campoli.me
+
+proxy:
+  ssl: true
+  host: sneaker.campoli.me
+
+registry:
+  server: ghcr.io
+  username: xkraty
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+env:
+  secret:
+    - RAILS_MASTER_KEY
+    - POSTGRES_PASSWORD
+  clear:
+    SOLID_QUEUE_IN_PUMA: true
+    DB_HOST: discord_demo-db
+    DB_USERNAME: discord_demo
+    RAILS_LOG_LEVEL: info
+
+aliases:
+  console: app exec --interactive --reuse "bin/rails console"
+  shell:   app exec --interactive --reuse "bash"
+  logs:    app logs -f
+  dbc:     app exec --interactive --reuse "bin/rails dbconsole"
+
+# Active Storage volume (unused in v1 but cheap to provision).
+volumes:
+  - "discord_demo_storage:/rails/storage"
+
+asset_path: /rails/public/assets
+
+builder:
+  arch: amd64
+
+# Postgres accessory — same VPS, kamal docker network.
+# IMPORTANT: after first `kamal setup`, the cache/queue/cable databases
+# don't exist yet. Run once:
+#   kamal accessory exec db --reuse "psql -U discord_demo -d discord_demo_production \
+#     -c 'CREATE DATABASE discord_demo_production_cache; \
+#         CREATE DATABASE discord_demo_production_queue; \
+#         CREATE DATABASE discord_demo_production_cable;'"
+#   kamal deploy
+accessories:
+  db:
+    image: postgres:17
+    roles:
+      - web
+    env:
+      clear:
+        POSTGRES_USER: discord_demo
+        POSTGRES_DB: discord_demo_production
+      secret:
+        - POSTGRES_PASSWORD
+    directories:
+      - data:/var/lib/postgresql/data

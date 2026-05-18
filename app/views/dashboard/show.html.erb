@@ -1,0 +1,91 @@
+<% content_for :title, "Discord DM Capture — live feed" %>
+
+<%= turbo_stream_from "dms" %>
+
+<header class="mb-6 border-b border-slate-200 pb-4">
+  <div class="flex items-center justify-between">
+    <h1 class="text-xl font-semibold tracking-tight">Discord DM Capture</h1>
+    <span class="text-xs text-slate-500 font-mono">
+      <%= ENV["RAILS_ENV"] || Rails.env %>
+    </span>
+  </div>
+
+  <dl class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+    <div>
+      <dt class="text-slate-500">Open gateways</dt>
+      <dd class="font-medium"><%= @gateways_open %></dd>
+    </div>
+    <div>
+      <dt class="text-slate-500">Last DM</dt>
+      <dd class="font-medium">
+        <% if @last_message_at %>
+          <time datetime="<%= @last_message_at.iso8601 %>" title="<%= @last_message_at.iso8601 %>">
+            <%= time_ago_in_words(@last_message_at) %> ago
+          </time>
+        <% else %>
+          <span class="text-slate-400">never</span>
+        <% end %>
+      </dd>
+    </div>
+    <div>
+      <dt class="text-slate-500">Last session event</dt>
+      <dd class="font-medium">
+        <% if @last_session_event %>
+          <%= @last_session_event.event %>
+          <span class="text-slate-400">
+            (<%= time_ago_in_words(@last_session_event.occurred_at) %> ago)
+          </span>
+        <% else %>
+          <span class="text-slate-400">none</span>
+        <% end %>
+      </dd>
+    </div>
+    <div>
+      <dt class="text-slate-500">Total DMs captured</dt>
+      <dd class="font-medium"><%= DiscordMessage.dms.where(event_type: "MESSAGE_CREATE").count %></dd>
+    </div>
+  </dl>
+</header>
+
+<div id="feed" class="space-y-2">
+  <% if @messages.any? %>
+    <%= render partial: "discord_messages/discord_message", collection: @messages, as: :message %>
+  <% else %>
+    <div class="text-sm text-slate-500 italic p-4 border border-dashed border-slate-300 rounded">
+      No DMs captured yet. Configure the Chrome extension's <code class="font-mono text-xs bg-slate-100 px-1 py-0.5 rounded">INGEST_URL</code> and API key,
+      then receive a DM in Discord. New messages will appear here live.
+    </div>
+  <% end %>
+</div>
+
+<%# Slide-in drawer for the per-channel conversation. Hidden by default;
+    the Stimulus controller shows it whenever the inner Turbo Frame loads
+    a thread (and hides it when the Close button or Escape fires). %>
+<div data-controller="thread-drawer"
+     data-thread-drawer-open-class="translate-x-0"
+     data-thread-drawer-closed-class="translate-x-full"
+     class="fixed inset-0 z-40 pointer-events-none hidden"
+     data-thread-drawer-target="root">
+
+  <%# Backdrop — click to close. %>
+  <div class="absolute inset-0 bg-slate-900/30 transition-opacity opacity-0"
+       data-thread-drawer-target="backdrop"
+       data-action="click->thread-drawer#close"
+       aria-hidden="true"></div>
+
+  <%# Panel. Slides in from the right via translate-x utilities. %>
+  <aside class="absolute top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl
+                pointer-events-auto translate-x-full transition-transform duration-200 ease-out
+                flex flex-col"
+         data-thread-drawer-target="panel"
+         role="dialog"
+         aria-modal="true"
+         aria-label="Conversation">
+
+    <%# The Turbo Frame the dashboard links target. Server renders the
+        thread INTO this frame. When the frame is empty, the dashboard
+        controller treats the drawer as closed. %>
+    <%= turbo_frame_tag :thread_drawer, class: "flex-1 overflow-y-auto",
+        data: { thread_drawer_target: "frame" } %>
+  </aside>
+</div>
