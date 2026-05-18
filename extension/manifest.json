@@ -11,7 +11,7 @@
   "host_permissions": [
     "https://discord.com/*",
     "https://*.discord.com/*",
-    "https://webhook.site/*",
+    "https://sneaker.campoli.me/*",
     "http://localhost/*",
     "http://127.0.0.1/*"
   ],

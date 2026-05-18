@@ -18,12 +18,84 @@
       </span>
     </div>
 
+    <%# Reply quote — Discord inlines the referenced message for replies %>
+    <% if (reply = message.reply_context) %>
+      <div class="mb-2 pl-2 border-l-2 border-slate-300 text-xs text-slate-500">
+        <div>
+          replying to
+          <span class="font-medium text-slate-600">@<%= reply.author_display %></span>
+        </div>
+        <% if reply.content.present? %>
+          <div class="text-slate-600 whitespace-pre-wrap break-words italic">
+            <%= truncate(reply.content, length: 200) %>
+          </div>
+        <% elsif reply.has_attachments? %>
+          <div class="italic text-slate-400">(attachment)</div>
+        <% end %>
+      </div>
+    <% end %>
+
     <% if message.content.present? %>
       <div class="text-slate-700 whitespace-pre-wrap break-words">
         <%= truncate(message.content, length: 800) %>
       </div>
-    <% else %>
+    <% elsif message.attachments.none? && message.stickers.none? && message.embed_urls.none? %>
       <div class="text-xs text-slate-400 italic">(no text content)</div>
+    <% end %>
+
+    <%# Attachments: render images inline, everything else as a file link %>
+    <% if message.attachments.any? %>
+      <div class="mt-2 flex flex-wrap gap-2">
+        <% message.attachments.each do |att| %>
+          <% if att.image? && att.url.present? %>
+            <a href="<%= att.url %>" target="_blank" rel="noopener noreferrer"
+               class="block shrink-0 overflow-hidden rounded border border-slate-200 bg-slate-50">
+              <img src="<%= att.url %>"
+                   alt="<%= att.filename %>"
+                   loading="lazy"
+                   class="max-h-72 max-w-full object-contain block">
+            </a>
+          <% else %>
+            <a href="<%= att.url %>" target="_blank" rel="noopener noreferrer"
+               class="inline-flex items-center gap-2 px-2 py-1 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs">
+              <span aria-hidden="true">📎</span>
+              <span class="font-medium"><%= att.filename %></span>
+              <% if att.human_size %>
+                <span class="text-slate-400">(<%= att.human_size %>)</span>
+              <% end %>
+            </a>
+          <% end %>
+        <% end %>
+      </div>
+    <% end %>
+
+    <%# Stickers: render the PNG/GIF from Discord's CDN %>
+    <% if message.stickers.any? %>
+      <div class="mt-2 flex flex-wrap gap-2">
+        <% message.stickers.each do |s| %>
+          <% if s.renderable_as_image? %>
+            <img src="<%= s.url %>"
+                 alt="sticker: <%= s.name %>"
+                 title="<%= s.name %>"
+                 loading="lazy"
+                 class="w-24 h-24 object-contain">
+          <% else %>
+            <span class="text-xs text-slate-400 italic">(sticker: <%= s.name %>)</span>
+          <% end %>
+        <% end %>
+      </div>
+    <% end %>
+
+    <%# Embeds: just plain links per the v1 decision %>
+    <% if message.embed_urls.any? %>
+      <div class="mt-2 flex flex-col gap-0.5">
+        <% message.embed_urls.each do |url| %>
+          <a href="<%= url %>" target="_blank" rel="noopener noreferrer"
+             class="text-xs text-blue-600 hover:underline break-all">
+            <%= url %>
+          </a>
+        <% end %>
+      </div>
     <% end %>
   </div>
 </article>

@@ -8,7 +8,7 @@
 // Set INGEST_URL to null (or empty string) to disable Rails ingest entirely —
 // useful for viewer-only mode where you just want to watch frames in the side
 // panel without persisting them anywhere.
-const INGEST_URL  = "https://webhook.site/8245eec1-cd53-4e0e-81d6-b9c2443fad81";
+const INGEST_URL  = "https://sneaker.campoli.me/capture/ingest";
 const COMMAND_URL = null;
 const COMMAND_ACK_URL = (id) => `${COMMAND_URL?.replace(/\/commands$/, '')}/commands/${id}/ack`;
 const INGEST_DISABLED = !INGEST_URL;
