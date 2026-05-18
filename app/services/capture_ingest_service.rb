@@ -70,7 +70,10 @@ class CaptureIngestService
       end
     return false if discord_message_id.blank?
 
-    attrs = {
+    # We use create! (not upsert) so after_create_commit fires for Turbo
+    # broadcasts. Duplicates are rejected at the DB level by the UNIQUE
+    # constraint; we rescue and treat them as "already accepted".
+    DiscordMessage.create!(
       event_type:          event_type,
       discord_message_id:  discord_message_id,
       discord_channel_id:  d["channel_id"] || d["id"],
@@ -84,12 +87,10 @@ class CaptureIngestService
       captured_at:         Time.current,
       ws_id:               @event["ws_id"],
       received_at:         parse_time(@event["received_at"])
-    }
-
-    DiscordMessage.upsert(
-      attrs.merge(created_at: Time.current, updated_at: Time.current),
-      unique_by: :idx_discord_messages_id_type
     )
+  rescue ActiveRecord::RecordNotUnique
+    # Idempotent retry — the row already exists; not an error.
+    true
   end
 
   def maybe_upsert_channel_from_frame(event_type, d)

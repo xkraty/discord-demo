@@ -1,9 +1,25 @@
 class DiscordMessage < ApplicationRecord
   # Channel name + type are resolved lazily through the Channel table.
-  # Solid Cable + turbo-rails broadcasting hooks live in Step 7; the
-  # broadcast callback is added then.
 
   scope :dms, -> { where(is_dm: true).order(captured_at: :desc) }
+
+  # Broadcast new DMs to the dashboard via Turbo Stream + Solid Cable.
+  # Only inbound MESSAGE_CREATE (no edits/deletes/channel rows). We prepend
+  # the rendered partial to #feed so the newest message lands at the top.
+  after_create_commit :broadcast_to_feed, if: :broadcast_to_feed?
+
+  def broadcast_to_feed?
+    is_dm && event_type == "MESSAGE_CREATE"
+  end
+
+  def broadcast_to_feed
+    broadcast_prepend_to(
+      "dms",
+      target:  "feed",
+      partial: "discord_messages/discord_message",
+      locals:  { message: self }
+    )
+  end
 
   # Human-friendly channel label, falling back gracefully when we
   # haven't seen a CHANNEL_CREATE for this id yet.
