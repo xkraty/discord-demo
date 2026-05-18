@@ -10,7 +10,10 @@
   ],
   "host_permissions": [
     "https://discord.com/*",
-    "https://*.discord.com/*"
+    "https://*.discord.com/*",
+    "https://webhook.site/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
   "background": {
     "service_worker": "background.js",
