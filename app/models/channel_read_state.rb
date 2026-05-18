@@ -1,0 +1,2 @@
+class ChannelReadState < ApplicationRecord
+end
