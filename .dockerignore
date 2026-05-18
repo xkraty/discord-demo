@@ -49,3 +49,10 @@
 # Ignore Docker-related files
 /.dockerignore
 /Dockerfile*
+
+# Chrome extension lives in the same repo for convenience but is not part
+# of the Rails image.
+/extension/
+
+# Long-term planning doc, not needed at runtime.
+/PRODUCTION_PLAN.md
