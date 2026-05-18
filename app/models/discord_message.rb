@@ -67,11 +67,19 @@ class DiscordMessage < ApplicationRecord
     @stickers ||= Array(raw_payload["sticker_items"]).map { |s| Sticker.new(s) }
   end
 
-  # Embeds — for v1 we don't try to render rich previews. We extract the
-  # canonical URL of each embed so the view can render them as plain links
-  # alongside the message content.
-  def embed_urls
-    @embed_urls ||= Array(raw_payload["embeds"]).map { |e| e["url"] }.compact.uniq
+  # Embeds — rich preview cards. Discord bots send their main content this
+  # way: title, description, fields, color stripe, thumbnail. We wrap each
+  # payload entry in a RichEmbed so the view can render it without scraping
+  # the raw hash inline.
+  def embeds
+    @embeds ||= Array(raw_payload["embeds"]).map { |e| RichEmbed.new(e) }
+  end
+
+  # True when the message has nothing visible: no text content, no
+  # attachments, no stickers, no usable embeds. Used to decide whether to
+  # show a "(no text content)" placeholder.
+  def renderable_body?
+    content.present? || attachments.any? || stickers.any? || embeds.any?(&:any_content?)
   end
 
   # Reply context. When this message was a reply, Discord inlines the
@@ -159,5 +167,64 @@ class DiscordMessage < ApplicationRecord
     def author_display = @raw.dig("author", "global_name") || @raw.dig("author", "username") || "(unknown)"
     def content        = @raw["content"]
     def has_attachments? = Array(@raw["attachments"]).any?
+  end
+
+  # Wrapper around a Discord rich embed. Bots use these as their primary
+  # content surface, so we render the lot: title (linked when url present),
+  # description, fields, author, footer, thumbnail. Discord encodes the
+  # accent color as a decimal integer; we convert to a #rrggbb hex string
+  # for the CSS left-border stripe.
+  class RichEmbed
+    attr_reader :raw
+
+    def initialize(raw)
+      @raw = raw.is_a?(Hash) ? raw : {}
+    end
+
+    def type        = @raw["type"]
+    def title       = @raw["title"]
+    def description = @raw["description"]
+    def url         = @raw["url"]
+
+    def color_hex
+      c = @raw["color"]
+      return nil if c.nil? || c.zero?
+      "#%06x" % c.to_i
+    end
+
+    def thumbnail_url = @raw.dig("thumbnail", "proxy_url") || @raw.dig("thumbnail", "url")
+    def image_url     = @raw.dig("image", "proxy_url") || @raw.dig("image", "url")
+    def video_url     = @raw.dig("video", "url")
+
+    def author_name = @raw.dig("author", "name")
+    def author_url  = @raw.dig("author", "url")
+
+    def footer_text = @raw.dig("footer", "text")
+    def timestamp   = @raw["timestamp"]
+
+    def fields
+      Array(@raw["fields"]).map { |f| EmbedField.new(f) }
+    end
+
+    # True when this embed has anything renderable. Discord sometimes sends
+    # empty placeholder embeds (e.g. when a link is detected but the
+    # unfurler returned nothing); we hide those.
+    def any_content?
+      title.present? || description.present? || url.present? ||
+        fields.any? || image_url.present? || thumbnail_url.present? ||
+        author_name.present? || footer_text.present?
+    end
+  end
+
+  class EmbedField
+    attr_reader :raw
+
+    def initialize(raw)
+      @raw = raw.is_a?(Hash) ? raw : {}
+    end
+
+    def name   = @raw["name"]
+    def value  = @raw["value"]
+    def inline = !!@raw["inline"]
   end
 end

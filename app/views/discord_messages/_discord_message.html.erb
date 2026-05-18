@@ -39,8 +39,8 @@
       <div class="text-slate-700 whitespace-pre-wrap break-words">
         <%= truncate(message.content, length: 800) %>
       </div>
-    <% elsif message.attachments.none? && message.stickers.none? && message.embed_urls.none? %>
-      <div class="text-xs text-slate-400 italic">(no text content)</div>
+    <% elsif !message.renderable_body? %>
+      <div class="text-xs text-slate-400 italic">(no content)</div>
     <% end %>
 
     <%# Attachments: render images inline, everything else as a file link %>
@@ -86,14 +86,87 @@
       </div>
     <% end %>
 
-    <%# Embeds: just plain links per the v1 decision %>
-    <% if message.embed_urls.any? %>
-      <div class="mt-2 flex flex-col gap-0.5">
-        <% message.embed_urls.each do |url| %>
-          <a href="<%= url %>" target="_blank" rel="noopener noreferrer"
-             class="text-xs text-blue-600 hover:underline break-all">
-            <%= url %>
-          </a>
+    <%# Rich embeds (bot announcements, link previews, Tenor GIFs).
+        Skip empty placeholder embeds (Discord sometimes sends one when
+        a URL is detected but unfurling returned nothing). %>
+    <% if (visible_embeds = message.embeds.select(&:any_content?)).any? %>
+      <div class="mt-2 flex flex-col gap-2">
+        <% visible_embeds.each do |embed| %>
+          <div class="rounded border border-slate-200 bg-slate-50 overflow-hidden"
+               style="<%= "border-left: 3px solid #{embed.color_hex};" if embed.color_hex %>">
+            <div class="p-3 flex gap-3">
+              <div class="flex-1 min-w-0">
+                <% if embed.author_name.present? %>
+                  <div class="text-xs text-slate-500 mb-1">
+                    <% if embed.author_url.present? %>
+                      <a href="<%= embed.author_url %>" target="_blank" rel="noopener noreferrer"
+                         class="hover:underline"><%= embed.author_name %></a>
+                    <% else %>
+                      <%= embed.author_name %>
+                    <% end %>
+                  </div>
+                <% end %>
+
+                <% if embed.title.present? %>
+                  <div class="font-medium text-slate-900 mb-1">
+                    <% if embed.url.present? %>
+                      <a href="<%= embed.url %>" target="_blank" rel="noopener noreferrer"
+                         class="text-blue-700 hover:underline"><%= embed.title %></a>
+                    <% else %>
+                      <%= embed.title %>
+                    <% end %>
+                  </div>
+                <% end %>
+
+                <% if embed.description.present? %>
+                  <div class="text-sm text-slate-700 whitespace-pre-wrap break-words mb-2">
+                    <%= truncate(embed.description, length: 800) %>
+                  </div>
+                <% end %>
+
+                <% if embed.fields.any? %>
+                  <%# Inline fields side-by-side, non-inline full-width.
+                      Group consecutive inline fields into a flex row. %>
+                  <div class="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-xs">
+                    <% embed.fields.each do |field| %>
+                      <div class="<%= field.inline ? 'min-w-[8rem]' : 'basis-full' %>">
+                        <div class="font-semibold text-slate-800"><%= field.name %></div>
+                        <div class="text-slate-700 whitespace-pre-wrap break-words"><%= field.value %></div>
+                      </div>
+                    <% end %>
+                  </div>
+                <% end %>
+
+                <% if embed.image_url.present? %>
+                  <a href="<%= embed.image_url %>" target="_blank" rel="noopener noreferrer"
+                     class="block mt-2 overflow-hidden rounded border border-slate-200">
+                    <img src="<%= embed.image_url %>"
+                         alt="<%= embed.title.to_s %>"
+                         loading="lazy"
+                         class="max-h-72 max-w-full object-contain block">
+                  </a>
+                <% end %>
+
+                <% if embed.footer_text.present? || embed.timestamp.present? %>
+                  <div class="text-xs text-slate-400 mt-2">
+                    <%= embed.footer_text %>
+                    <% if embed.footer_text.present? && embed.timestamp.present? %> · <% end %>
+                    <%= embed.timestamp %>
+                  </div>
+                <% end %>
+              </div>
+
+              <% if embed.thumbnail_url.present? %>
+                <a href="<%= embed.thumbnail_url %>" target="_blank" rel="noopener noreferrer"
+                   class="shrink-0 overflow-hidden rounded border border-slate-200 bg-white">
+                  <img src="<%= embed.thumbnail_url %>"
+                       alt=""
+                       loading="lazy"
+                       class="w-16 h-16 object-cover block">
+                </a>
+              <% end %>
+            </div>
+          </div>
         <% end %>
       </div>
     <% end %>
