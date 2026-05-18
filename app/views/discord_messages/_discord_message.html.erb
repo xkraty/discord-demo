@@ -1,4 +1,8 @@
-<article id="<%= dom_id(message) %>" class="bg-white border border-slate-200 rounded p-3 flex gap-3 text-sm">
+<article id="<%= dom_id(message) %>"
+         class="bg-white border border-slate-200 rounded p-3 flex gap-3 text-sm scroll-mt-4">
+  <%# Secondary anchor by Discord message id, so reply hooks can scroll
+      to the original without a DB roundtrip. Empty span = zero visual cost. %>
+  <span id="msg-<%= message.discord_message_id %>" class="sr-only" aria-hidden="true"></span>
   <div class="text-xs text-slate-400 font-mono tabular-nums shrink-0 w-20 pt-0.5">
     <time datetime="<%= message.captured_at.iso8601 %>" title="<%= message.captured_at.iso8601 %>">
       <%= message.captured_at.strftime("%H:%M:%S") %>
@@ -6,6 +10,36 @@
   </div>
 
   <div class="flex-1 min-w-0">
+    <%# Channel chip on its own line, full-width and prominent. A
+        deterministic color per channel id makes the same channel look the
+        same every time, so you can spot channel changes while scrolling. %>
+    <% if message.display_channel_name.present? %>
+      <% chip_color = message.channel_chip_color %>
+      <div class="mb-1.5">
+        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium"
+              style="background: <%= chip_color[:bg] %>; color: <%= chip_color[:fg] %>;">
+          <span class="opacity-70">#</span><%= message.display_channel_name.sub(/\A#/, "") %>
+        </span>
+      </div>
+    <% end %>
+
+    <%# Reply quote: Discord-style corner-connector. A short condensed line
+        (↳ @author: quoted preview) that visually attaches to the new
+        message just below. Click anchors to the original row if it's on
+        the same page (target=#discord_message_<id>). %>
+    <% if (reply = message.reply_context) %>
+      <% reply_anchor = reply.message_id ? "#msg-#{reply.message_id}" : nil %>
+      <a class="block mb-0.5 text-xs text-slate-500 hover:text-slate-700 truncate"
+         <%= "href=#{reply_anchor.inspect}".html_safe if reply_anchor %>>
+        <span class="inline-block align-middle text-slate-400 mr-1">↳</span>
+        <span class="font-medium text-slate-600">@<%= reply.author_display %></span><%
+        %><% if reply.content.present? %><span class="text-slate-500">:
+          <%= truncate(reply.content.tr("\n", " "), length: 140) %></span>
+        <% elsif reply.has_attachments? %><span class="italic text-slate-400 ml-1">(attachment)</span>
+        <% end %>
+      </a>
+    <% end %>
+
     <div class="flex items-baseline gap-2 mb-0.5">
       <span class="font-medium text-slate-900">
         <%= message.author_display_name.presence || message.author_username.presence || "(unknown)" %>
@@ -13,27 +47,7 @@
       <% if message.author_username.present? && message.author_username != message.author_display_name %>
         <span class="text-xs text-slate-400">@<%= message.author_username %></span>
       <% end %>
-      <span class="text-xs text-slate-500 ml-auto shrink-0">
-        <%= message.display_channel_name %>
-      </span>
     </div>
-
-    <%# Reply quote — Discord inlines the referenced message for replies %>
-    <% if (reply = message.reply_context) %>
-      <div class="mb-2 pl-2 border-l-2 border-slate-300 text-xs text-slate-500">
-        <div>
-          replying to
-          <span class="font-medium text-slate-600">@<%= reply.author_display %></span>
-        </div>
-        <% if reply.content.present? %>
-          <div class="text-slate-600 whitespace-pre-wrap break-words italic">
-            <%= truncate(reply.content, length: 200) %>
-          </div>
-        <% elsif reply.has_attachments? %>
-          <div class="italic text-slate-400">(attachment)</div>
-        <% end %>
-      </div>
-    <% end %>
 
     <% if message.content.present? %>
       <div class="text-slate-700 whitespace-pre-wrap break-words">

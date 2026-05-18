@@ -1,3 +1,5 @@
+require "zlib"
+
 class DiscordMessage < ApplicationRecord
   # Channel name + type are resolved lazily through the Channel table.
 
@@ -33,6 +35,21 @@ class DiscordMessage < ApplicationRecord
         Channel.find_by(discord_channel_id: discord_channel_id)&.name ||
           (is_dm ? "DM" : "##{discord_channel_id}")
       end
+  end
+
+  # Deterministic chip color derived from the channel id, so the same DM /
+  # channel always shows the same badge. Returns a soft pastel background
+  # with a darker foreground that stays readable on white. Hash uses CRC32
+  # so it's stable across processes (unlike Ruby's String#hash).
+  def channel_chip_color
+    @channel_chip_color ||= begin
+      seed = discord_channel_id.presence || "default"
+      hue  = Zlib.crc32(seed) % 360
+      {
+        bg: "hsl(#{hue}, 65%, 92%)",
+        fg: "hsl(#{hue}, 55%, 28%)"
+      }
+    end
   end
 
   # The Discord raw payload may include a recipient/recipients block for DMs.
@@ -156,7 +173,8 @@ class DiscordMessage < ApplicationRecord
     end
   end
 
-  # Quote-block info for a reply.
+  # Quote-block info for a reply. Exposes the referenced message's id so
+  # the view can render a same-page anchor to scroll to the original row.
   class Reply
     attr_reader :raw
 
@@ -164,8 +182,9 @@ class DiscordMessage < ApplicationRecord
       @raw = raw.is_a?(Hash) ? raw : {}
     end
 
-    def author_display = @raw.dig("author", "global_name") || @raw.dig("author", "username") || "(unknown)"
-    def content        = @raw["content"]
+    def message_id       = @raw["id"]
+    def author_display   = @raw.dig("author", "global_name") || @raw.dig("author", "username") || "(unknown)"
+    def content          = @raw["content"]
     def has_attachments? = Array(@raw["attachments"]).any?
   end
 
