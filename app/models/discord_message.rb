@@ -36,6 +36,26 @@ class DiscordMessage < ApplicationRecord
     end
   end
 
+  # HTML-safe rendering of `content` with Discord mention tokens (<@id>,
+  # <#id>, <:emoji:id>, etc) substituted for human-readable labels.
+  # Returns an ActiveSupport::SafeBuffer the view can interpolate
+  # directly. Returns nil when content is blank so the view can detect
+  # "no content" cases cleanly.
+  def rendered_content
+    return nil if content.blank?
+    @rendered_content ||= MessageRenderer.new(raw_payload).call(content)
+  end
+
+  # Same rendering for the referenced (replied-to) message's content.
+  # Uses the *referenced* message's own mentions array (Discord inlines
+  # it on referenced_message), so user IDs in the quoted text resolve
+  # correctly even if the current message doesn't mention them.
+  def rendered_reply_content(text)
+    return nil if text.blank?
+    ref = raw_payload.is_a?(Hash) ? raw_payload["referenced_message"] : nil
+    MessageRenderer.new(ref || raw_payload).call(text)
+  end
+
   # Human-friendly channel label, falling back gracefully when we
   # haven't seen a CHANNEL_CREATE for this id yet.
   def display_channel_name

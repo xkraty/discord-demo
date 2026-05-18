@@ -19,7 +19,7 @@
         <span class="inline-block align-middle text-slate-400 mr-1">↳</span>
         <span class="font-medium text-slate-600">@<%= reply.author_display %></span><%
         %><% if reply.content.present? %><span class="text-slate-500">:
-          <%= truncate(reply.content.tr("\n", " "), length: 120) %></span>
+          <%= message.rendered_reply_content(truncate(reply.content.tr("\n", " "), length: 120)) %></span>
         <% elsif reply.has_attachments? %><span class="italic text-slate-400 ml-1">(attachment)</span>
         <% end %>
       </a>
@@ -36,7 +36,7 @@
 
     <% if message.content.present? %>
       <div class="text-slate-700 whitespace-pre-wrap break-words">
-        <%= message.content %>
+        <%= message.rendered_content %>
       </div>
     <% elsif !message.renderable_body? %>
       <div class="text-xs text-slate-400 italic">(no content)</div>

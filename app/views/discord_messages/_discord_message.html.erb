@@ -37,7 +37,8 @@
         <span class="inline-block align-middle text-slate-400 mr-1">↳</span>
         <span class="font-medium text-slate-600">@<%= reply.author_display %></span><%
         %><% if reply.content.present? %><span class="text-slate-500">:
-          <%= truncate(reply.content.tr("\n", " "), length: 140) %></span>
+          <%# Truncate first (raw text, safe), then render mentions. %>
+          <%= message.rendered_reply_content(truncate(reply.content.tr("\n", " "), length: 140)) %></span>
         <% elsif reply.has_attachments? %><span class="italic text-slate-400 ml-1">(attachment)</span>
         <% end %>
       </a>
@@ -54,7 +55,10 @@
 
     <% if message.content.present? %>
       <div class="text-slate-700 whitespace-pre-wrap break-words">
-        <%= truncate(message.content, length: 800) %>
+        <%# rendered_content is html_safe and resolves <@id>, <#id>,
+            <:emoji:id> mention tokens. We don't truncate here because
+            slicing would risk cutting through inline mention spans. %>
+        <%= message.rendered_content %>
       </div>
     <% elsif !message.renderable_body? %>
       <div class="text-xs text-slate-400 italic">(no content)</div>
