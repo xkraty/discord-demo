@@ -10,7 +10,7 @@ class CreateAckRequests < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :ack_requests, [:discord_channel_id, :discord_message_id]
+    add_index :ack_requests, [ :discord_channel_id, :discord_message_id ]
     add_index :ack_requests, :sent_at  # for "unprocessed" queries
   end
 end

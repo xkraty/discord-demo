@@ -95,7 +95,7 @@ class DiscordMessage < ApplicationRecord
       "id"         => payload["channel_id"],
       "type"       => is_dm ? 1 : nil,
       "name"       => payload.dig("author", "global_name") || payload.dig("author", "username"),
-      "recipients" => is_dm ? [payload["author"]].compact : nil
+      "recipients" => is_dm ? [ payload["author"] ].compact : nil
     }
   end
 
@@ -202,7 +202,7 @@ class DiscordMessage < ApplicationRecord
     end
 
     def renderable_as_image?
-      [1, 2, 4].include?(format_type) && id.present?
+      [ 1, 2, 4 ].include?(format_type) && id.present?
     end
   end
 

@@ -105,7 +105,7 @@ class CaptureIngestService
       Channel.upsert_from_payload(
         "id"         => d["channel_id"],
         "type"       => 1,
-        "recipients" => [d["author"]].compact
+        "recipients" => [ d["author"] ].compact
       )
     end
   end

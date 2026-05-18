@@ -19,10 +19,10 @@ class CreateDiscordMessages < ActiveRecord::Migration[8.1]
     end
 
     add_index :discord_messages,
-              [:discord_message_id, :event_type],
+              [ :discord_message_id, :event_type ],
               unique: true,
               name: "idx_discord_messages_id_type"
-    add_index :discord_messages, [:is_dm, :captured_at]
+    add_index :discord_messages, [ :is_dm, :captured_at ]
     add_index :discord_messages, :discord_channel_id
   end
 end
