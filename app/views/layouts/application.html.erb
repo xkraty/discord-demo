@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title><%= content_for(:title) || "Discord Demo Scaffold" %></title>
+    <title><%= content_for(:title) || "Discord DM Capture" %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="application-name" content="Discord Demo Scaffold">
+    <meta name="application-name" content="Discord DM Capture">
     <meta name="mobile-web-app-capable" content="yes">
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
@@ -23,8 +23,8 @@
     <%= javascript_importmap_tags %>
   </head>
 
-  <body>
-    <main class="container mx-auto mt-28 px-5 flex">
+  <body class="bg-slate-50 text-slate-900">
+    <main class="max-w-4xl mx-auto px-4 py-6">
       <%= yield %>
     </main>
   </body>
