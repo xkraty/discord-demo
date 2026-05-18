@@ -1,0 +1,52 @@
+<%# Top-level Turbo Frame the dashboard targets when opening the drawer. %>
+<%= turbo_frame_tag :thread_drawer do %>
+  <%# Subscribe to per-channel updates: new MESSAGE_CREATE rows for this
+      channel get appended into #thread-stream below. %>
+  <%= turbo_stream_from "channel:#{@discord_channel_id}" %>
+
+  <header class="px-4 py-3 border-b border-slate-200 flex items-start justify-between gap-3 sticky top-0 bg-white z-10">
+    <div class="min-w-0 flex-1">
+      <% chip_color = @messages.first&.channel_chip_color || { bg: "#f1f5f9", fg: "#334155" } %>
+      <div class="text-xs text-slate-500 mb-0.5">Conversation</div>
+      <div class="font-semibold text-slate-900 truncate">
+        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-sm font-medium"
+              style="background: <%= chip_color[:bg] %>; color: <%= chip_color[:fg] %>;">
+          <span class="opacity-70">#</span><%= (@channel&.name || @discord_channel_id).sub(/\A#/, "") %>
+        </span>
+      </div>
+      <div class="text-xs text-slate-400 font-mono mt-1 truncate" title="<%= @discord_channel_id %>">
+        <%= @discord_channel_id %>
+      </div>
+    </div>
+
+    <%# Close button: navigates the frame back to an empty state. The
+        dashboard listens for thread-drawer:close and hides the panel. %>
+    <button type="button"
+            data-action="thread-drawer#close"
+            class="shrink-0 px-2 py-1 -mr-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded text-sm"
+            aria-label="Close conversation">
+      ✕
+    </button>
+  </header>
+
+  <% if @messages.any? %>
+    <div id="thread-stream" class="px-4 py-3 space-y-2">
+      <%= render partial: "channel_threads/thread_message", collection: @messages, as: :message %>
+    </div>
+    <%# Tiny inline script to scroll the drawer to the latest message on
+        initial render (matches Discord's "open chat, see latest" behavior).
+        Scoped to the frame so it doesn't fire for unrelated navigations. %>
+    <script>
+      (function () {
+        const el = document.getElementById("thread-stream");
+        if (el && el.lastElementChild) {
+          el.lastElementChild.scrollIntoView({ block: "end" });
+        }
+      })();
+    </script>
+  <% else %>
+    <div class="p-4 text-sm text-slate-400 italic">
+      No messages captured for this channel yet.
+    </div>
+  <% end %>
+<% end %>

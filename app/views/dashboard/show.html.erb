@@ -57,3 +57,35 @@
     </div>
   <% end %>
 </div>
+
+<%# Slide-in drawer for the per-channel conversation. Hidden by default;
+    the Stimulus controller shows it whenever the inner Turbo Frame loads
+    a thread (and hides it when the Close button or Escape fires). %>
+<div data-controller="thread-drawer"
+     data-thread-drawer-open-class="translate-x-0"
+     data-thread-drawer-closed-class="translate-x-full"
+     class="fixed inset-0 z-40 pointer-events-none hidden"
+     data-thread-drawer-target="root">
+
+  <%# Backdrop — click to close. %>
+  <div class="absolute inset-0 bg-slate-900/30 transition-opacity opacity-0"
+       data-thread-drawer-target="backdrop"
+       data-action="click->thread-drawer#close"
+       aria-hidden="true"></div>
+
+  <%# Panel. Slides in from the right via translate-x utilities. %>
+  <aside class="absolute top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl
+                pointer-events-auto translate-x-full transition-transform duration-200 ease-out
+                flex flex-col"
+         data-thread-drawer-target="panel"
+         role="dialog"
+         aria-modal="true"
+         aria-label="Conversation">
+
+    <%# The Turbo Frame the dashboard links target. Server renders the
+        thread INTO this frame. When the frame is empty, the dashboard
+        controller treats the drawer as closed. %>
+    <%= turbo_frame_tag :thread_drawer, class: "flex-1 overflow-y-auto",
+        data: { thread_drawer_target: "frame" } %>
+  </aside>
+</div>

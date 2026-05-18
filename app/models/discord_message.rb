@@ -6,21 +6,34 @@ class DiscordMessage < ApplicationRecord
   scope :dms, -> { where(is_dm: true).order(captured_at: :desc) }
 
   # Broadcast new DMs to the dashboard via Turbo Stream + Solid Cable.
-  # Only inbound MESSAGE_CREATE (no edits/deletes/channel rows). We prepend
-  # the rendered partial to #feed so the newest message lands at the top.
-  after_create_commit :broadcast_to_feed, if: :broadcast_to_feed?
+  # Only inbound MESSAGE_CREATE (no edits/deletes/channel rows). We
+  # prepend the rendered partial to #feed so the newest message lands at
+  # the top, AND we append to the per-channel thread stream so any open
+  # drawer for the same channel scrolls a fresh row in at the bottom.
+  after_create_commit :broadcast_message_create, if: :broadcastable_message?
 
-  def broadcast_to_feed?
+  def broadcastable_message?
     is_dm && event_type == "MESSAGE_CREATE"
   end
 
-  def broadcast_to_feed
+  def broadcast_message_create
+    # Dashboard feed (newest first).
     broadcast_prepend_to(
       "dms",
       target:  "feed",
       partial: "discord_messages/discord_message",
       locals:  { message: self }
     )
+
+    # Per-channel thread (oldest first → append the newest at the bottom).
+    if discord_channel_id.present?
+      broadcast_append_to(
+        "channel:#{discord_channel_id}",
+        target:  "thread-stream",
+        partial: "channel_threads/thread_message",
+        locals:  { message: self }
+      )
+    end
   end
 
   # Human-friendly channel label, falling back gracefully when we
