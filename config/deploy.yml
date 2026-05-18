@@ -1,34 +1,18 @@
-# Kamal 2 deploy config — single VPS, ghcr.io image, postgres accessory.
-#
-# Before first deploy:
-#   1. DNS: <YOUR_DOMAIN> A record → <YOUR_SERVER_IP>
-#   2. ~/.kamal/ghcr-token       (GitHub PAT with write:packages, read:packages)
-#   3. ~/.kamal/discord-demo-pg-password   (random hex)
-#   4. SSH access to the box: `ssh root@<YOUR_DOMAIN>` works
-#   5. `kamal setup` (first time), then `kamal deploy` afterwards
-
 service: discord_demo
 
-# Replace <github-username> with your GitHub user/org. ghcr stores the
-# image at ghcr.io/<github-username>/discord_demo:<sha>.
-image: <github-username>/discord_demo
+image: xkraty/discord_demo
 
 servers:
   web:
     - sneaker.campoli.me
 
-# Kamal-proxy terminates TLS via Let's Encrypt. Requires DNS to resolve
-# to this server BEFORE `kamal setup` so the cert challenge can complete.
 proxy:
   ssl: true
   host: sneaker.campoli.me
-  healthcheck:
-    path: /up
-    interval: 10
 
 registry:
   server: ghcr.io
-  username: <github-username>
+  username: xkraty
   password:
     - KAMAL_REGISTRY_PASSWORD
 
@@ -37,9 +21,7 @@ env:
     - RAILS_MASTER_KEY
     - POSTGRES_PASSWORD
   clear:
-    # Run Solid Queue inside Puma (single-server v1; no separate jobs role).
     SOLID_QUEUE_IN_PUMA: true
-    # discord_demo-db is the accessory hostname on the kamal docker network.
     DB_HOST: discord_demo-db
     DB_USERNAME: discord_demo
     RAILS_LOG_LEVEL: info
@@ -70,8 +52,8 @@ builder:
 accessories:
   db:
     image: postgres:17
-    host: sneaker.campoli.me
-    port: "127.0.0.1:5432:5432"
+    roles:
+      - web
     env:
       clear:
         POSTGRES_USER: discord_demo
