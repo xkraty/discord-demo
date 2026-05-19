@@ -52,6 +52,28 @@ const STATE = {
   // channelId -> display name. Populated from READY's private_channels +
   // guilds[].channels, and updated on CHANNEL_CREATE/UPDATE.
   channelNames:  new Map(),
+
+  // Watchdog: detects when the Discord tab's gateway has stalled (frozen
+  // by Chrome when the browser is minimized, abnormal close with no
+  // reconnect, etc) and force-reloads the tab.
+  reloadTimestamps:    [],   // sliding window of recent reloads (epoch ms)
+  pendingCloseTimer:   null, // setTimeout id; cleared on gateway_open
+};
+
+// Watchdog tunables (kept in sync with PRODUCTION_PLAN values).
+const WATCHDOG = {
+  // If no frame arrives for this long while we believe a gateway exists,
+  // assume the page is frozen and reload the tab.
+  silenceMs:        2 * 60 * 1000,    // 2 minutes
+  // After a gateway_close, wait this long for a fresh gateway_open before
+  // forcing a reload. Discord normally resumes within seconds.
+  postCloseMs:      30 * 1000,        // 30 seconds
+  // Sliding cap on reloads so a misfire can't loop and trip Discord's
+  // anti-abuse heuristics.
+  reloadWindowMs:   60 * 60 * 1000,   // 60 minutes
+  reloadWindowMax:  6,                // 6 reloads per window
+  // URL pattern of tabs we'll reload.
+  tabUrlPattern:    "https://discord.com/*",
 };
 
 // ---- bootstrap --------------------------------------------------------------
@@ -78,15 +100,132 @@ const STATE = {
   startCommandLoop();
 })();
 
-// Keepalive alarm (belt-and-braces alongside the port pings).
+// Keepalive alarm (belt-and-braces alongside the port pings) — also drives
+// the watchdog that catches stalled gateways and force-reloads the tab.
 chrome.alarms.create('keepalive', { periodInMinutes: 1 });
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === 'keepalive') {
-    // No-op — the wakeup itself is the point. But while we're here, drain
-    // the queue if anything pending.
+    // Drain the queue if anything pending.
     if (STATE.queue.length && !STATE.flushTimer && !STATE.backoffTimer) scheduleFlush(0);
+    // And check whether the Discord tab has gone silent.
+    watchdogTick();
   }
 });
+
+// ---- watchdog ---------------------------------------------------------------
+//
+// Chrome aggressively throttles JS timers in backgrounded tabs (and worse
+// when the browser is minimized). Discord's web client uses those timers
+// for gateway-reconnect logic, so an abnormal close in a hidden tab can
+// take 30-60+ minutes to recover on its own. The service worker, however,
+// isn't throttled the same way — so we run the recovery logic here.
+//
+// Two recovery paths:
+//   1. Explicit gateway_close → start a 30s timer; if no gateway_open
+//      arrives, reload the tab.
+//   2. Generic silence detection (every keepalive tick = every 60s):
+//      if no frame in N minutes and we have an open gateway, reload.
+//
+// Reloads are throttled to 6/hour to avoid a runaway loop in case the
+// watchdog's heuristics ever misfire. Each reload is logged to
+// session_events as `extension_forced_reload` (or `reload_throttled`).
+
+async function findDiscordTab() {
+  try {
+    const tabs = await chrome.tabs.query({ url: WATCHDOG.tabUrlPattern });
+    // Prefer a tab whose URL looks like a real Discord client view
+    // (channels/*); fall back to whatever's first.
+    return tabs.find((t) => t.url && t.url.includes("/channels/")) || tabs[0] || null;
+  } catch (e) {
+    log('watchdog_query_failed', { err: String(e).slice(0, 200) });
+    return null;
+  }
+}
+
+function reloadBudgetAvailable() {
+  const now    = Date.now();
+  const cutoff = now - WATCHDOG.reloadWindowMs;
+  STATE.reloadTimestamps = STATE.reloadTimestamps.filter((ts) => ts >= cutoff);
+  return STATE.reloadTimestamps.length < WATCHDOG.reloadWindowMax;
+}
+
+async function forceReload(reason) {
+  if (!reloadBudgetAvailable()) {
+    log('reload_throttled', { reason, recentReloads: STATE.reloadTimestamps.length });
+    enqueueSession('reload_throttled', null, JSON.stringify({
+      reason, recent_reloads_60m: STATE.reloadTimestamps.length,
+    }));
+    return false;
+  }
+
+  const tab = await findDiscordTab();
+  if (!tab) {
+    log('reload_no_tab', { reason });
+    enqueueSession('reload_no_tab', null, reason);
+    return false;
+  }
+
+  STATE.reloadTimestamps.push(Date.now());
+  enqueueSession('extension_forced_reload', null, JSON.stringify({
+    reason, tab_id: tab.id, tab_url: (tab.url || '').slice(0, 200),
+  }));
+  log('forcing_reload', { reason, tabId: tab.id });
+
+  try {
+    await chrome.tabs.reload(tab.id, { bypassCache: false });
+    // The reload tears down the content script + WebSocket. We'll see a
+    // fresh gateway_open from the new page within a few seconds; nothing
+    // more to do here.
+    return true;
+  } catch (e) {
+    log('reload_failed', { reason, err: String(e).slice(0, 200) });
+    enqueueSession('reload_failed', null, String(e).slice(0, 200));
+    return false;
+  }
+}
+
+function watchdogTick() {
+  // No bridges = no Discord tab is open, or it can't talk to us yet.
+  // Nothing useful to do (a reload won't help if the tab isn't loaded).
+  if (STATE.bridges.size === 0) return;
+
+  // If we have no notion of an open gateway, the tab might just be slow
+  // to handshake. Don't act yet — gateway_open will arrive or won't.
+  if (STATE.gatewaysOpen.size === 0) return;
+
+  const last = STATE.lastFrameAt;
+  if (!last) return;  // never received a frame; bootstrap state
+
+  const silentFor = Date.now() - last;
+  if (silentFor < WATCHDOG.silenceMs) return;
+
+  // Stale enough to act. Reload.
+  forceReload(`silent_${Math.floor(silentFor / 1000)}s`);
+}
+
+// Hooked into the gateway_close bridge message: arm a 30s timer, then
+// reload if no gateway_open arrives in time. Cleared by gateway_open.
+function scheduleCloseTimeoutReload(closeInfo) {
+  if (STATE.pendingCloseTimer) {
+    clearTimeout(STATE.pendingCloseTimer);
+  }
+  STATE.pendingCloseTimer = setTimeout(() => {
+    STATE.pendingCloseTimer = null;
+    // If a gateway is open by now, the SPA's reconnect worked. Stand down.
+    if (STATE.gatewaysOpen.size > 0) {
+      log('close_timer_recovered', {});
+      return;
+    }
+    forceReload(`close_timeout_${closeInfo.code}`);
+  }, WATCHDOG.postCloseMs);
+}
+
+function cancelCloseTimer() {
+  if (STATE.pendingCloseTimer) {
+    clearTimeout(STATE.pendingCloseTimer);
+    STATE.pendingCloseTimer = null;
+  }
+}
 
 // ---- port handling ----------------------------------------------------------
 
@@ -160,6 +299,11 @@ function handleBridgeMessage(bridgeId, port, msg) {
     case 'gateway_open':
       STATE.gatewaysOpen.add(payload.wsId);
       enqueueSession('gateway_open', payload.wsId, payload.url || null);
+      // A fresh gateway means whatever close/silence we were worried about
+      // is moot. Reset lastFrameAt to "now" so the silence watchdog doesn't
+      // fire on the gap that just ended, and cancel any pending reload.
+      STATE.lastFrameAt = Date.now();
+      cancelCloseTimer();
       return;
 
     case 'gateway_close':
@@ -167,6 +311,11 @@ function handleBridgeMessage(bridgeId, port, msg) {
       enqueueSession('gateway_close', payload.wsId, JSON.stringify({
         code: payload.code, reason: payload.reason, wasClean: payload.wasClean,
       }));
+      // Arm the recovery timer. If the SPA reconnects on its own within
+      // 30s, gateway_open will cancel it. Otherwise we reload the tab.
+      scheduleCloseTimeoutReload({
+        code: payload.code, reason: payload.reason, wasClean: payload.wasClean,
+      });
       return;
 
     case 'gateway_error':

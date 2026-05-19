@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Discord DM Capture",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Mirrors inbound Discord gateway frames to the sourcing dashboard. Receives-only in v1.",
   "permissions": [
     "storage",
     "alarms",
-    "sidePanel"
+    "sidePanel",
+    "tabs"
   ],
   "host_permissions": [
     "https://discord.com/*",
