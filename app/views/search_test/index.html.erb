@@ -7,8 +7,9 @@
   <p class="text-xs text-slate-500 mt-0.5">Type anything — SKU, product name fragment, seller-style message. Searches the real DB.</p>
 </header>
 
-<%= form_with url: search_test_path, method: :post, local: true, class: "flex gap-2 mb-6" do |f| %>
+<%= form_with url: search_test_path, method: :post, local: true, html: { id: "search_form" }, class: "flex gap-2 mb-6" do |f| %>
   <%= f.text_field :q, value: @raw_query,
+        id: "search_q",
         placeholder: "e.g. velvet brown  /  DZ4137-700  /  nocta glide  /  VN000E8VFST 41 195",
         autofocus: true,
         class: "flex-1 rounded border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400" %>
@@ -80,24 +81,26 @@
   <% end %>
 
 <% else %>
-  <%# Suggested searches from real SKU patterns %>
-  <div class="text-xs text-slate-400 space-y-1">
+  <%# Suggested searches — click fills the input and submits the main form %>
+  <div class="text-xs text-slate-400">
     <p class="font-medium text-slate-500 mb-2">Try:</p>
-    <% [
-         "velvet brown",
-         "DZ4137-700",
-         "nocta glide",
-         "cream nyc",
-         "travis canary",
-         "VN000E8VFST 41 195",
-         "kayano white graphite",
-         "old skool navy",
-       ].each do |suggestion| %>
-      <%= form_with url: search_test_path, method: :post, local: true, class: "inline" do |f| %>
-        <%= f.hidden_field :q, value: suggestion %>
-        <%= f.submit suggestion,
-              class: "cursor-pointer rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 hover:border-slate-300 mr-1 mb-1" %>
+    <div class="flex flex-wrap gap-1">
+      <% [
+           "velvet brown",
+           "DZ4137-700",
+           "nocta glide",
+           "cream nyc",
+           "travis canary",
+           "VN000E8VFST 41 195",
+           "kayano white graphite",
+           "old skool navy",
+         ].each do |suggestion| %>
+        <button type="button"
+                onclick="document.getElementById('search_q').value = <%= suggestion.to_json %>; document.getElementById('search_form').submit();"
+                class="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 hover:border-slate-300">
+          <%= suggestion %>
+        </button>
       <% end %>
-    <% end %>
+    </div>
   </div>
 <% end %>
