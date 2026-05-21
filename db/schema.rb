@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_18_103930) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_21_103209) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -78,4 +78,29 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_18_103930) do
     t.index ["event"], name: "index_discord_session_events_on_event"
     t.index ["occurred_at"], name: "index_discord_session_events_on_occurred_at"
   end
+
+  create_table "orders", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "customer_email"
+    t.integer "order_number", null: false
+    t.date "ordered_at"
+    t.bigint "product_id", null: false
+    t.string "size"
+    t.integer "sold_price_cents"
+    t.string "status"
+    t.datetime "updated_at", null: false
+    t.index ["customer_email"], name: "index_orders_on_customer_email"
+    t.index ["order_number"], name: "index_orders_on_order_number"
+    t.index ["product_id"], name: "index_orders_on_product_id"
+  end
+
+  create_table "products", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "name", null: false
+    t.string "sku", null: false
+    t.datetime "updated_at", null: false
+    t.index ["sku"], name: "index_products_on_sku", unique: true
+  end
+
+  add_foreign_key "orders", "products"
 end
