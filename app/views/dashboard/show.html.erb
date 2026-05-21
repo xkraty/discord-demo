@@ -4,20 +4,19 @@
 
 <%= render "shared/nav" %>
 
-<%# Stale-capture banner: if the latest captured message is older than the
-    threshold, the extension is probably stuck or the home PC is offline.
-    Shown above the header so it's the first thing the operator sees. %>
-<% stale_threshold = 5.minutes
-   stale = @last_message_at && @last_message_at < stale_threshold.ago %>
+<%# Stale-capture banner: shown only when gateway activity (any frame or
+    session event) has gone quiet — meaning the extension itself is stuck
+    or the home PC is offline. No DMs ≠ stalled; Discord can just be quiet. %>
+<% stale = @last_activity_at && @last_activity_at < 5.minutes.ago %>
 <% if stale %>
   <div class="mb-4 px-4 py-3 rounded border border-red-200 bg-red-50 text-red-900 text-sm flex items-start gap-3">
     <span class="text-lg leading-none">⚠</span>
     <div class="flex-1">
-      <div class="font-medium">Capture stalled</div>
+      <div class="font-medium">Extension appears offline</div>
       <div class="text-xs text-red-700 mt-0.5">
-        Last frame captured
-        <time datetime="<%= @last_message_at.iso8601 %>" title="<%= @last_message_at.iso8601 %>">
-          <%= time_ago_in_words(@last_message_at) %> ago
+        No gateway activity for
+        <time datetime="<%= @last_activity_at.iso8601 %>" title="<%= @last_activity_at.iso8601 %>">
+          <%= time_ago_in_words(@last_activity_at) %>
         </time>.
         Check the home PC, Chrome, and the Discord tab.
       </div>

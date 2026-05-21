@@ -5,6 +5,8 @@ class DashboardController < ApplicationController
     @messages = DiscordMessage.dms.where(event_type: "MESSAGE_CREATE").limit(100)
     @last_session_event = DiscordSessionEvent.recent.first
     @last_message_at    = DiscordMessage.dms.maximum(:captured_at)
+    @last_activity_at   = [ DiscordMessage.maximum(:captured_at),
+                             @last_session_event&.occurred_at ].compact.max
     @gateways_open      = DiscordSessionEvent
                             .where(event: %w[gateway_open gateway_close])
                             .order(occurred_at: :desc)
