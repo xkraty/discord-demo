@@ -17,7 +17,6 @@ namespace :import do
       size       = row["SIZE"]&.strip
       price_raw  = row["SOLD PRICE"]&.strip
       date_raw   = row["DATE"]&.strip
-      email      = row["CUSTOMER EMAIL"]&.strip&.presence
 
       # Skip rows without the basics
       if sku.blank? || name.blank? || order_num.blank? || order_num !~ /\A\d+\z/
@@ -31,33 +30,31 @@ namespace :import do
       end
       imported_products += 1 if product.previously_new_record?
 
-      # Parse sold price: "1.095,95" → 109595
+      # Parse sold price — two formats present in the CSV:
+      #   European: "1.095,95" (dot=thousands, comma=decimal)
+      #   Plain:    "203.95"   (dot=decimal, no thousands sep)
+      # Detect by presence of comma: if comma exists treat as European.
       price_cents = if price_raw.present?
-        price_raw.gsub(".", "").gsub(",", ".").to_f.round * 100
+        normalised = if price_raw.include?(",")
+          price_raw.gsub(".", "").gsub(",", ".")   # "1.095,95" → "1095.95"
+        else
+          price_raw.gsub(",", "")                  # "203.95"   → "203.95"
+        end
+        (normalised.to_f * 100).round
       end
 
-      # Parse date or treat as status string
+      # Parse date — only store when it's a real date, skip status strings
       ordered_at = nil
-      status     = nil
       if date_raw =~ /\A\d{1,2}-\d{1,2}-\d{4}\z/
-        begin
-          ordered_at = Date.strptime(date_raw, "%d-%m-%Y")
-          status = "completed"
-        rescue Date::Error
-          status = date_raw.downcase
-        end
-      else
-        status = date_raw&.downcase
+        ordered_at = Date.strptime(date_raw, "%d-%m-%Y") rescue nil
       end
 
       Order.create!(
-        order_number:    order_num.to_i,
-        product:         product,
-        size:            size,
+        order_number:     order_num.to_i,
+        product:          product,
+        size:             size,
         sold_price_cents: price_cents,
-        status:          status,
-        ordered_at:      ordered_at,
-        customer_email:  email
+        ordered_at:       ordered_at
       )
       imported_orders += 1
     rescue ActiveRecord::RecordInvalid => e

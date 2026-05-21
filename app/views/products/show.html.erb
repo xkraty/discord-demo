@@ -21,8 +21,6 @@
           <th class="px-3 py-2 text-left font-medium">Date</th>
           <th class="px-3 py-2 text-left font-medium">Size</th>
           <th class="px-3 py-2 text-right font-medium">Price</th>
-          <th class="px-3 py-2 text-left font-medium">Status</th>
-          <th class="px-3 py-2 text-left font-medium">Customer</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-100">
@@ -34,25 +32,7 @@
             </td>
             <td class="px-3 py-2 text-slate-700"><%= order.size %></td>
             <td class="px-3 py-2 text-right font-medium tabular-nums">
-              <% if order.sold_price_cents %>
-                €<%= format("%.2f", order.sold_price_cents / 100.0) %>
-              <% else %>
-                <span class="text-slate-400">—</span>
-              <% end %>
-            </td>
-            <td class="px-3 py-2">
-              <% status_color = case order.status
-                   when "completed"                        then "bg-emerald-50 text-emerald-700"
-                   when /cancel/                           then "bg-red-50 text-red-700"
-                   when /no.stock|not.in|urgent|reorder/  then "bg-amber-50 text-amber-700"
-                   else                                        "bg-slate-100 text-slate-600"
-                   end %>
-              <span class="inline-block px-1.5 py-0.5 rounded text-xs font-medium <%= status_color %>">
-                <%= order.status %>
-              </span>
-            </td>
-            <td class="px-3 py-2 text-xs text-slate-500">
-              <%= order.customer_email.presence || "—" %>
+              <%= order.sold_price_display %>
             </td>
           </tr>
         <% end %>
