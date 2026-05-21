@@ -61,12 +61,19 @@ class SearchTestController < ApplicationController
   private
 
   def extract_search_terms(text)
+    # Hyphenated SKUs (DZ4137-700) and long all-caps tokens (VN000E8VFST)
     sku_tokens = text.scan(/\b[A-Za-z0-9]{2,}(?:-[A-Za-z0-9]+)+\b/)
                      .concat(text.scan(/\b[A-Z][A-Z0-9]{5,}\b/))
                      .map(&:strip).uniq
 
+    # Strip non-alpha, collect words 4+ chars
     words = text.gsub(/[^a-zA-Z\s]/, " ").split.select { |w| w.length >= 4 }
-    name_phrases = words.combination(2).map { |a, b| "#{a} #{b}" }.first(5)
+
+    # Full cleaned phrase + all 2-word combos + individual words as fallback
+    name_phrases = []
+    name_phrases << words.join(" ") if words.size >= 2
+    name_phrases += words.combination(2).map { |a, b| "#{a} #{b}" }.first(5)
+    name_phrases += words  # single-word fallback
 
     (sku_tokens + name_phrases).uniq
   end

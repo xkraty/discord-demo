@@ -1,0 +1,109 @@
+<% content_for :title, "Matcher" %>
+
+<%= render "shared/nav" %>
+
+<header class="mb-5">
+  <h1 class="text-xl font-semibold tracking-tight">Matcher</h1>
+  <p class="text-xs text-slate-500 mt-0.5">Paste a seller message. It's sent to gpt-4o-mini, which extracts product offers (SKU / size / price). Each offer is then matched against the product database below.</p>
+</header>
+
+<%# ── Top area: paste a message ── %>
+<%= form_with url: matcher_path, method: :post, local: true, html: { id: "matcher_form" }, class: "mb-6" do |f| %>
+  <%= f.text_area :message, value: @raw_message,
+        id: "matcher_message",
+        rows: 4,
+        placeholder: "e.g.\nDZ4137-700 43 390\nDM7866-200 40.5 540",
+        autofocus: true,
+        class: "w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm font-mono shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400" %>
+  <div class="mt-2 flex items-center gap-2">
+    <%= f.submit "Extract & match", class: "rounded bg-slate-800 px-4 py-2 text-sm text-white hover:bg-slate-700 cursor-pointer" %>
+    <% if @raw_message.present? %>
+      <%= link_to "Clear", matcher_path, class: "rounded border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50" %>
+    <% end %>
+  </div>
+<% end %>
+
+<% if @llm_error.present? %>
+  <div class="mb-6 rounded border border-dashed border-red-300 bg-red-50 px-4 py-3">
+    <p class="text-sm text-red-700"><%= @llm_error %></p>
+  </div>
+<% end %>
+
+<%# ── Bottom area: extracted offers + matched products ── %>
+<% if @raw_message.present? && @llm_error.blank? %>
+  <% if @matches.present? %>
+    <div class="space-y-3">
+      <% @matches.each do |m| %>
+        <div class="rounded border border-slate-200 bg-white overflow-hidden">
+
+          <%# What the LLM understood %>
+          <div class="px-4 py-2 bg-slate-50 border-b border-slate-200 flex items-center gap-2 flex-wrap">
+            <span class="text-xs text-slate-400">extracted</span>
+            <% if m[:sku].present? %>
+              <code class="text-xs font-mono font-semibold text-slate-700 bg-white border border-slate-200 rounded px-1.5 py-0.5"><%= m[:sku] %></code>
+            <% end %>
+            <% if m[:name].present? %>
+              <span class="text-xs font-medium text-slate-700"><%= m[:name] %></span>
+            <% end %>
+            <% if m[:size].present? %>
+              <span class="text-xs text-slate-500">size <span class="font-medium tabular-nums"><%= m[:size] %></span></span>
+            <% end %>
+            <% if m[:price].present? %>
+              <span class="ml-auto bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-1.5 py-0.5 text-xs font-mono">€<%= m[:price] %></span>
+            <% end %>
+          </div>
+
+          <%# Matched products %>
+          <% if m[:products].present? %>
+            <ul class="divide-y divide-slate-100">
+              <% m[:products].each do |p| %>
+                <li class="px-4 py-3 flex items-center gap-4">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-slate-900 truncate"><%= p.name %></div>
+                    <div class="mt-0.5 flex items-center gap-3">
+                      <code class="text-xs font-mono text-slate-400"><%= p.sku %></code>
+                      <span class="text-xs text-slate-300">·</span>
+                      <span class="text-xs text-slate-400"><%= pluralize(p.orders.size, "order") %></span>
+                    </div>
+                  </div>
+                  <% avg = p.orders.average(:sold_price_cents)&.to_f %>
+                  <% if avg %>
+                    <div class="text-right shrink-0">
+                      <div class="text-xs text-slate-400">avg sold</div>
+                      <div class="text-sm font-medium tabular-nums">€<%= "%.0f" % (avg / 100) %></div>
+                    </div>
+                  <% end %>
+                  <%= link_to "→", product_path(p),
+                        class: "shrink-0 text-slate-400 hover:text-slate-800 text-sm" %>
+                </li>
+              <% end %>
+            </ul>
+          <% else %>
+            <div class="px-4 py-3 text-xs text-slate-400">No product matched this offer.</div>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+
+  <% else %>
+    <div class="rounded border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
+      <p class="text-sm text-slate-500">No offer detected in this message.</p>
+      <p class="text-xs text-slate-400 mt-1">It might just be a greeting or small talk.</p>
+    </div>
+  <% end %>
+
+<% elsif @raw_message.blank? %>
+  <%# Example messages — click to fill + submit %>
+  <div class="text-xs text-slate-400">
+    <p class="font-medium text-slate-500 mb-2">Try a message:</p>
+    <div class="flex flex-col gap-1 max-w-md">
+      <% @examples.each do |example| %>
+        <button type="button"
+                onclick="document.getElementById('matcher_message').value = <%= example.to_json %>; document.getElementById('matcher_form').submit();"
+                class="text-left rounded border border-slate-200 bg-white px-2 py-1.5 text-xs font-mono text-slate-600 hover:bg-slate-50 hover:border-slate-300 whitespace-pre-wrap">
+          <%= example %>
+        </button>
+      <% end %>
+    </div>
+  </div>
+<% end %>
