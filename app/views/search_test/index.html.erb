@@ -1,0 +1,103 @@
+<% content_for :title, "Search Test" %>
+
+<%= render "shared/nav" %>
+
+<header class="mb-5">
+  <h1 class="text-xl font-semibold tracking-tight">Search Test</h1>
+  <p class="text-xs text-slate-500 mt-0.5">Type anything — SKU, product name fragment, seller-style message. Searches the real DB.</p>
+</header>
+
+<%= form_with url: search_test_path, method: :post, local: true, class: "flex gap-2 mb-6" do |f| %>
+  <%= f.text_field :q, value: @raw_query,
+        placeholder: "e.g. velvet brown  /  DZ4137-700  /  nocta glide  /  VN000E8VFST 41 195",
+        autofocus: true,
+        class: "flex-1 rounded border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400" %>
+  <%= f.submit "Search", class: "rounded bg-slate-800 px-4 py-2 text-sm text-white hover:bg-slate-700 cursor-pointer" %>
+  <% if @raw_query.present? %>
+    <%= link_to "Clear", search_test_path, class: "rounded border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50" %>
+  <% end %>
+<% end %>
+
+<% if @raw_query.present? %>
+  <% if @results.present? %>
+
+    <%# Prices extracted from the query %>
+    <% if @prices.present? %>
+      <div class="mb-4 flex items-center gap-2 text-xs text-slate-500">
+        <span class="font-medium">Prices found in message:</span>
+        <% @prices.each do |price| %>
+          <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-1.5 py-0.5 font-mono">€<%= price %></span>
+        <% end %>
+      </div>
+    <% end %>
+
+    <div class="space-y-3">
+      <% @results.each_with_index do |r, i| %>
+        <div class="rounded border border-slate-200 bg-white overflow-hidden">
+
+          <%# Match header — what term triggered this %>
+          <div class="px-4 py-2 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+            <span class="text-xs text-slate-400">matched on</span>
+            <code class="text-xs font-mono font-semibold text-slate-700 bg-white border border-slate-200 rounded px-1.5 py-0.5"><%= r[:term] %></code>
+            <span class="ml-auto text-xs text-slate-400"><%= pluralize(r[:products].size, "result") %></span>
+          </div>
+
+          <%# Product rows %>
+          <ul class="divide-y divide-slate-100">
+            <% r[:products].each do |p| %>
+              <li class="px-4 py-3 flex items-center gap-4">
+                <div class="flex-1 min-w-0">
+                  <div class="text-sm font-medium text-slate-900 truncate"><%= p.name %></div>
+                  <div class="mt-0.5 flex items-center gap-3">
+                    <code class="text-xs font-mono text-slate-400"><%= p.sku %></code>
+                    <span class="text-xs text-slate-300">·</span>
+                    <span class="text-xs text-slate-400"><%= pluralize(p.orders.size, "order") %></span>
+                  </div>
+                </div>
+                <% if @prices.present? %>
+                  <div class="text-right shrink-0">
+                    <% avg = p.orders.average(:sold_price_cents)&.to_f %>
+                    <% if avg %>
+                      <div class="text-xs text-slate-400">avg sold</div>
+                      <div class="text-sm font-medium tabular-nums">€<%= "%.0f" % (avg / 100) %></div>
+                    <% end %>
+                  </div>
+                <% end %>
+                <%= link_to "→", product_path(p),
+                      class: "shrink-0 text-slate-400 hover:text-slate-800 text-sm" %>
+              </li>
+            <% end %>
+          </ul>
+        </div>
+      <% end %>
+    </div>
+
+  <% else %>
+    <div class="rounded border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
+      <p class="text-sm text-slate-500">No products matched <strong class="font-medium"><%= @raw_query %></strong>.</p>
+      <p class="text-xs text-slate-400 mt-1">Try a SKU, brand name, or colorway.</p>
+    </div>
+  <% end %>
+
+<% else %>
+  <%# Suggested searches from real SKU patterns %>
+  <div class="text-xs text-slate-400 space-y-1">
+    <p class="font-medium text-slate-500 mb-2">Try:</p>
+    <% [
+         "velvet brown",
+         "DZ4137-700",
+         "nocta glide",
+         "cream nyc",
+         "travis canary",
+         "VN000E8VFST 41 195",
+         "kayano white graphite",
+         "old skool navy",
+       ].each do |suggestion| %>
+      <%= form_with url: search_test_path, method: :post, local: true, class: "inline" do |f| %>
+        <%= f.hidden_field :q, value: suggestion %>
+        <%= f.submit suggestion,
+              class: "cursor-pointer rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 hover:border-slate-300 mr-1 mb-1" %>
+      <% end %>
+    <% end %>
+  </div>
+<% end %>

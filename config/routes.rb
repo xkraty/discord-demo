@@ -14,6 +14,9 @@ Rails.application.routes.draw do
   resources :products, only: %i[index show]
   resources :orders,   only: %i[index]
 
+  get  "search_test",  to: "search_test#index"
+  post "search_test",  to: "search_test#query"
+
   # Conversation thread drawer: GET /channels/:discord_channel_id renders
   # the last N messages from that Discord channel into a Turbo Frame so the
   # dashboard can swap it in as a side drawer. URL-encoded to allow the
