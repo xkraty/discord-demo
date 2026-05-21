@@ -67,7 +67,7 @@ const WATCHDOG = {
   silenceMs:        2 * 60 * 1000,    // 2 minutes
   // After a gateway_close, wait this long for a fresh gateway_open before
   // forcing a reload. Discord normally resumes within seconds.
-  postCloseMs:      30 * 1000,        // 30 seconds
+  postCloseMs:      5 * 1000,         // 5 seconds
   // Sliding cap on reloads so a misfire can't loop and trip Discord's
   // anti-abuse heuristics.
   reloadWindowMs:   60 * 60 * 1000,   // 60 minutes
