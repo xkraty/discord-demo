@@ -11,6 +11,9 @@ Rails.application.routes.draw do
   # Operator dashboard (basic-auth gated, built in step 6).
   root to: "dashboard#show"
 
+  resources :products, only: %i[index show]
+  resources :orders,   only: %i[index]
+
   # Conversation thread drawer: GET /channels/:discord_channel_id renders
   # the last N messages from that Discord channel into a Turbo Frame so the
   # dashboard can swap it in as a side drawer. URL-encoded to allow the

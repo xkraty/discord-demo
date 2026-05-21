@@ -2,6 +2,8 @@
 
 <%= turbo_stream_from "dms" %>
 
+<%= render "shared/nav" %>
+
 <%# Stale-capture banner: if the latest captured message is older than the
     threshold, the extension is probably stuck or the home PC is offline.
     Shown above the header so it's the first thing the operator sees. %>

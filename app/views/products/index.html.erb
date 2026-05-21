@@ -1,0 +1,67 @@
+<% content_for :title, "Products" %>
+
+<%= render "shared/nav" %>
+
+<header class="mb-4">
+  <h1 class="text-xl font-semibold tracking-tight">Products</h1>
+  <p class="text-xs text-slate-500 mt-0.5"><%= pluralize(Product.count, "product") %> total</p>
+</header>
+
+<form method="get" class="mb-4 flex gap-2">
+  <input type="text" name="q" value="<%= @q %>"
+         placeholder="Search by name or SKU…"
+         class="flex-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400">
+  <button type="submit"
+          class="rounded bg-slate-800 px-3 py-1.5 text-sm text-white hover:bg-slate-700">Search</button>
+  <% if @q.present? %>
+    <%= link_to "Clear", products_path, class: "rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50" %>
+  <% end %>
+</form>
+
+<div class="overflow-x-auto rounded border border-slate-200 bg-white">
+  <table class="w-full text-sm">
+    <thead class="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
+      <tr>
+        <th class="px-3 py-2 text-left font-medium">SKU</th>
+        <th class="px-3 py-2 text-left font-medium">Name</th>
+        <th class="px-3 py-2 text-right font-medium">Orders</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      <% if @products.any? %>
+        <% @products.each do |product| %>
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td class="px-3 py-2 font-mono text-xs text-slate-500 whitespace-nowrap">
+              <%= link_to product.sku, product_path(product), class: "hover:underline" %>
+            </td>
+            <td class="px-3 py-2">
+              <%= link_to product.name, product_path(product),
+                    class: "text-slate-800 hover:underline" %>
+            </td>
+            <td class="px-3 py-2 text-right text-slate-500">
+              <%= product.orders.size %>
+            </td>
+          </tr>
+        <% end %>
+      <% else %>
+        <tr>
+          <td colspan="3" class="px-3 py-8 text-center text-sm text-slate-400 italic">No products found.</td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>
+
+<% if @pagy.last > 1 %>
+  <div class="mt-4 flex items-center gap-2 text-sm">
+    <% if @pagy.previous %>
+      <%= link_to "← Prev", products_path(page: @pagy.previous, q: @q),
+            class: "rounded border border-slate-300 px-3 py-1.5 hover:bg-slate-50" %>
+    <% end %>
+    <span class="text-slate-500">Page <%= @pagy.page %> of <%= @pagy.last %></span>
+    <% if @pagy.next %>
+      <%= link_to "Next →", products_path(page: @pagy.next, q: @q),
+            class: "rounded border border-slate-300 px-3 py-1.5 hover:bg-slate-50" %>
+    <% end %>
+  </div>
+<% end %>
