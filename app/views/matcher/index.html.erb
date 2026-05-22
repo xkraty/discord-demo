@@ -8,7 +8,10 @@
 </header>
 
 <%# ── Top area: paste a message ── %>
-<%= form_with url: matcher_path, method: :post, local: true, html: { id: "matcher_form" }, class: "mb-6" do |f| %>
+<%# data-turbo=false: this is a POST that re-renders (not a redirect), so let the
+    browser do a normal full-page navigation. Turbo Drive would otherwise discard
+    a 200-from-POST and leave the page unchanged. %>
+<%= form_with url: matcher_path, method: :post, html: { id: "matcher_form", data: { turbo: false } }, class: "mb-6" do |f| %>
   <%= f.text_area :message, value: @raw_message,
         id: "matcher_message",
         rows: 4,
