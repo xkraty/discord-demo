@@ -10,15 +10,18 @@ class MatcherController < ApplicationController
   ].freeze
 
   def index
-    @examples = EXAMPLES
+    @examples      = EXAMPLES
+    @system_prompt = OfferExtractor::SYSTEM_PROMPT
   end
 
   def analyze
-    @examples    = EXAMPLES
-    @raw_message = params[:message].to_s.strip
+    @examples      = EXAMPLES
+    @raw_message   = params[:message].to_s.strip
+    # Editable on the page; fall back to the default so an empty box still works.
+    @system_prompt = params[:system_prompt].presence || OfferExtractor::SYSTEM_PROMPT
     return render :index if @raw_message.blank?
 
-    @offers = OfferExtractor.new(@raw_message).call
+    @offers = OfferExtractor.new(@raw_message, system_prompt: @system_prompt).call
 
     # Search products by SKU first, fall back to the name. Price/size are NOT
     # search inputs — they ride along on the offer for display.

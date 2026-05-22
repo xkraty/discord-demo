@@ -21,8 +21,11 @@ class OfferExtractor
 
   class MissingApiKey < StandardError; end
 
-  def initialize(message)
-    @message = message.to_s.strip
+  # system_prompt: lets the test page override the default instructions. Falls
+  # back to SYSTEM_PROMPT when blank.
+  def initialize(message, system_prompt: nil)
+    @message       = message.to_s.strip
+    @system_prompt = system_prompt.presence || SYSTEM_PROMPT
   end
 
   def call
@@ -32,7 +35,7 @@ class OfferExtractor
     response = RubyLLM.chat
                       .with_model(MODEL)
                       .with_temperature(0)
-                      .with_instructions(SYSTEM_PROMPT)
+                      .with_instructions(@system_prompt)
                       .with_schema(OfferSchema)
                       .ask(@message)
 
