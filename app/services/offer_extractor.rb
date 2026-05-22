@@ -15,6 +15,9 @@ class OfferExtractor
     never invent or correct them. If the seller names a product in words instead
     of a SKU (e.g. "velvet brown", "nocta glide"), put that in `name`.
 
+    Every offer must include all four fields: sku, name, size, price. Use an
+    empty string "" for any value you don't know — never guess or invent one.
+
     Messages may be in Italian. If a message contains no offer (a greeting or
     small talk like "ciao"), return an empty offers array.
   PROMPT
