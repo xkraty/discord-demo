@@ -26,13 +26,7 @@ class MatcherController < ApplicationController
     @raw_content = extractor.raw_content
     @usage       = extractor.usage
 
-    # Search products by SKU first, fall back to the name. Price/size are NOT
-    # search inputs — they ride along on the offer for display.
-    @matches = @offers.map do |offer|
-      term     = offer[:sku].presence || offer[:name].to_s
-      products = term.present? ? Product.search(term).limit(5).to_a : []
-      offer.merge(products: products)
-    end
+    @matches = @offers.map { |offer| offer.merge(search_for(offer)) }
 
     render :index
   rescue OfferExtractor::MissingApiKey
@@ -41,5 +35,30 @@ class MatcherController < ApplicationController
   rescue RubyLLM::Error => e
     @llm_error = "LLM request failed: #{e.message}"
     render :index
+  end
+
+  private
+
+  # Find matching products for an extracted offer. Sellers often give a wrong or
+  # garbled SKU but a good product name (or vice versa), so we try the SKU first
+  # and FALL BACK TO THE NAME when the SKU finds nothing — rather than only using
+  # the name when the SKU is blank. Price/size are never used to search.
+  #
+  # Returns { products:, matched_on: } where matched_on is :sku, :name, or nil.
+  def search_for(offer)
+    sku  = offer[:sku].to_s.strip
+    name = offer[:name].to_s.strip
+
+    if sku.present?
+      products = Product.search(sku).limit(5).to_a
+      return { products: products, matched_on: :sku } if products.any?
+    end
+
+    if name.present?
+      products = Product.search(name).limit(5).to_a
+      return { products: products, matched_on: :name } if products.any?
+    end
+
+    { products: [], matched_on: nil }
   end
 end

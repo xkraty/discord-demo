@@ -85,6 +85,9 @@
 
           <%# Matched products %>
           <% if m[:products].present? %>
+            <div class="px-4 pt-2 -mb-1 text-xs text-slate-400">
+              matched on <span class="font-medium text-slate-500"><%= m[:matched_on] %></span>
+            </div>
             <ul class="divide-y divide-slate-100">
               <% m[:products].each do |p| %>
                 <li class="px-4 py-3 flex items-center gap-4">

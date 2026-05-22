@@ -7,7 +7,10 @@
   <p class="text-xs text-slate-500 mt-0.5">Type anything — SKU, product name fragment, seller-style message. Searches the real DB.</p>
 </header>
 
-<%= form_with url: search_test_path, method: :post, local: true, html: { id: "search_form" }, class: "flex gap-2 mb-6" do |f| %>
+<%# data-turbo=false: POST that re-renders (not a redirect); let the browser do a
+    full-page navigation so the response renders. Turbo Drive would discard a
+    200-from-POST and leave the page unchanged. %>
+<%= form_with url: search_test_path, method: :post, html: { id: "search_form", data: { turbo: false } }, class: "flex gap-2 mb-6" do |f| %>
   <%= f.text_field :q, value: @raw_query,
         id: "search_q",
         placeholder: "e.g. velvet brown  /  DZ4137-700  /  nocta glide  /  VN000E8VFST 41 195",
