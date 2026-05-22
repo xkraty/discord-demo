@@ -21,7 +21,10 @@ class MatcherController < ApplicationController
     @system_prompt = params[:system_prompt].presence || OfferExtractor::SYSTEM_PROMPT
     return render :index if @raw_message.blank?
 
-    @offers = OfferExtractor.new(@raw_message, system_prompt: @system_prompt).call
+    extractor    = OfferExtractor.new(@raw_message, system_prompt: @system_prompt)
+    @offers      = extractor.call
+    @raw_content = extractor.raw_content
+    @usage       = extractor.usage
 
     # Search products by SKU first, fall back to the name. Price/size are NOT
     # search inputs — they ride along on the offer for display.

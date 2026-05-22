@@ -38,6 +38,24 @@
   </div>
 <% end %>
 
+<%# ── Raw OpenAI response ── %>
+<% if @raw_content.present? && @llm_error.blank? %>
+  <details class="mb-6" open>
+    <summary class="cursor-pointer text-xs font-medium text-slate-500 hover:text-slate-700 select-none flex items-center gap-2">
+      OpenAI response
+      <% if @usage.present? %>
+        <span class="font-normal text-slate-400">
+          <%= @usage[:model] %> · <%= @usage[:total] %> tokens (<%= @usage[:input] %> in / <%= @usage[:output] %> out)
+          <% if @usage[:cost] %>
+            · <span class="text-emerald-600">$<%= "%.6f" % @usage[:cost] %></span>
+          <% end %>
+        </span>
+      <% end %>
+    </summary>
+    <pre class="mt-2 rounded border border-slate-200 bg-slate-900 text-slate-100 px-4 py-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-words"><%= JSON.pretty_generate(@raw_content) %></pre>
+  </details>
+<% end %>
+
 <%# ── Bottom area: extracted offers + matched products ── %>
 <% if @raw_message.present? && @llm_error.blank? %>
   <% if @matches.present? %>

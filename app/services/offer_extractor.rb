@@ -24,6 +24,12 @@ class OfferExtractor
 
   class MissingApiKey < StandardError; end
 
+  # After #call, these hold the raw response so the test page can show it:
+  #   raw_content — the parsed JSON the model returned (Hash), or the raw String
+  #   usage       — { input:, output:, total:, model:, cost: } counts; cost is
+  #                 USD (Float) or nil if pricing for the model is unknown
+  attr_reader :raw_content, :usage
+
   # system_prompt: lets the test page override the default instructions. Falls
   # back to SYSTEM_PROMPT when blank.
   def initialize(message, system_prompt: nil)
@@ -42,8 +48,17 @@ class OfferExtractor
                       .with_schema(OfferSchema)
                       .ask(@message)
 
+    @raw_content = response.content
+    @usage = {
+      input:  response.input_tokens,
+      output: response.output_tokens,
+      total:  response.input_tokens.to_i + response.output_tokens.to_i,
+      model:  response.model_id,
+      cost:   response.cost&.total # USD; nil if model pricing is unknown
+    }
+
     # With a schema set, response.content is parsed JSON (a Hash with string keys).
-    offers = response.content.is_a?(Hash) ? response.content["offers"] : nil
+    offers = @raw_content.is_a?(Hash) ? @raw_content["offers"] : nil
     Array(offers).map { |o| o.symbolize_keys }
   end
 end
