@@ -9,8 +9,9 @@
 // useful for viewer-only mode where you just want to watch frames in the side
 // panel without persisting them anywhere.
 const INGEST_URL  = "https://sneaker.campoli.me/capture/ingest";
-const COMMAND_URL = null;
+const COMMAND_URL = "https://sneaker.campoli.me/commands";
 const COMMAND_ACK_URL = (id) => `${COMMAND_URL?.replace(/\/commands$/, '')}/commands/${id}/ack`;
+// e.g. https://sneaker.campoli.me/commands/42/ack
 const INGEST_DISABLED = !INGEST_URL;
 
 const FLUSH_MAX_EVENTS = 50;
@@ -753,23 +754,48 @@ async function dispatchCommand(cmd) {
     log('command_invalid', cmd);
     return;
   }
+  if (cmd.kind === 'send_message') {
+    await sendMessage(cmd.command_id, cmd.channel_id, cmd.body);
+    return;
+  }
   if (cmd.kind === 'send_ack') {
-    // Build the ACK frame. NOTE: exact opcode/payload to be confirmed from a
-    // captured real outbound ACK; this is a placeholder.
-    // Discord gateway: outbound payloads have shape {op, d}.
     const ackFrame = {
-      op: 3, // PLACEHOLDER. Update after observing a real client ACK.
-      d: {
-        channel_id: cmd.channel_id,
-        message_id: cmd.message_id,
-      },
+      op: 3,
+      d: { channel_id: cmd.channel_id, message_id: cmd.message_id },
     };
-    const text = JSON.stringify(ackFrame);
-    await sendOnGateway(cmd.command_id, text);
+    await sendOnGateway(cmd.command_id, JSON.stringify(ackFrame));
     return;
   }
   // Unknown kind — ack as failed so Rails doesn't keep re-sending it.
   await ackCommand(cmd.command_id, false, `unknown_command_kind:${cmd.kind}`);
+}
+
+function sendMessage(commandId, channelId, body) {
+  return new Promise((resolve) => {
+    const cmdId = crypto.randomUUID();
+    let resolved = false;
+    const timer = setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
+      STATE.pendingCmds.delete(cmdId);
+      ackCommand(commandId, false, 'cmd_timeout').then(resolve);
+    }, 15_000);
+    STATE.pendingCmds.set(cmdId, { commandId, resolve, timer, resolved: false });
+
+    let any = false;
+    for (const port of STATE.bridges.values()) {
+      try {
+        port.postMessage({ kind: 'send_message', payload: { cmdId, channelId, body } });
+        any = true;
+        break; // one bridge is enough — MAIN world fetch uses the page session
+      } catch (_) {}
+    }
+    if (!any) {
+      clearTimeout(timer);
+      STATE.pendingCmds.delete(cmdId);
+      ackCommand(commandId, false, 'no_bridges').then(resolve);
+    }
+  });
 }
 
 function sendOnGateway(commandId, text) {

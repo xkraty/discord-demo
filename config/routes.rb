@@ -29,4 +29,13 @@ Rails.application.routes.draw do
       to:           "channel_threads#show",
       constraints:  { discord_channel_id: %r{[^/]+} },
       as:           :channel_thread
+
+  post "channels/:discord_channel_id/messages",
+       to:          "outbound_messages#create",
+       constraints: { discord_channel_id: %r{[^/]+} },
+       as:          :channel_outbound_message
+
+  # Extension command long-poll: Bearer-authed, API-only.
+  get  "commands",         to: "commands#next_command", as: :next_command
+  post "commands/:id/ack", to: "commands#ack",          as: :ack_command
 end

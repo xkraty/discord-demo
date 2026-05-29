@@ -109,5 +109,40 @@
         controller treats the drawer as closed. %>
     <%= turbo_frame_tag :thread_drawer, class: "flex-1 overflow-y-auto",
         data: { thread_drawer_target: "frame" } %>
+
+    <%# Compose bar — sticky at the bottom, always present while drawer is open. %>
+    <div class="border-t border-slate-200 p-3 bg-white"
+         data-controller="compose"
+         data-compose-url-value=""
+         data-thread-drawer-target="compose">
+      <div class="flex items-end gap-2">
+        <textarea
+          data-compose-target="input"
+          data-action="keydown->compose#onKeydown input->compose#onInput"
+          rows="1"
+          placeholder="Message…"
+          maxlength="2000"
+          class="flex-1 resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm
+                 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2
+                 focus:ring-indigo-500 focus:border-indigo-500 leading-5 max-h-40 overflow-y-auto
+                 disabled:opacity-50 disabled:cursor-not-allowed"
+        ></textarea>
+        <button
+          type="button"
+          data-compose-target="button"
+          data-action="click->compose#send"
+          class="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg
+                 bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800
+                 focus:outline-none focus:ring-2 focus:ring-indigo-500
+                 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          aria-label="Send message"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+            <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.414 4.926A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95 28.897 28.897 0 0 0 15.293-7.155.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.288Z" />
+          </svg>
+        </button>
+      </div>
+      <div data-compose-target="status" class="text-xs text-slate-400 mt-1 hidden"></div>
+    </div>
   </aside>
 </div>

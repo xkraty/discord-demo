@@ -11,7 +11,7 @@ import { Controller } from "@hotwired/stimulus"
 // Close paths: backdrop click, Escape key, an explicit close button
 // (which empties the frame).
 export default class extends Controller {
-  static targets = ["root", "panel", "backdrop", "frame"]
+  static targets = ["root", "panel", "backdrop", "frame", "compose"]
   static classes = ["open", "closed"]
 
   connect() {
@@ -48,6 +48,20 @@ export default class extends Controller {
     this.backdropTarget.classList.remove("opacity-0")
     this.backdropTarget.classList.add("opacity-100")
     document.body.classList.add("overflow-hidden")
+    this._updateComposeUrl()
+  }
+
+  _updateComposeUrl() {
+    if (!this.hasComposeTarget) return
+    const src = this.frameTarget.src || ""
+    // Extract channel id from /channels/:id — the compose controller uses this
+    // to build the POST URL.
+    const match = src.match(/\/channels\/([^?#]+)/)
+    const channelId = match ? decodeURIComponent(match[1]) : ""
+    this.composeTarget.dataset.composeUrlValue =
+      channelId ? `/channels/${encodeURIComponent(channelId)}/messages` : ""
+    // Dispatch a custom event so the compose controller can re-read its value.
+    this.composeTarget.dispatchEvent(new CustomEvent("compose:channel-changed", { bubbles: false }))
   }
 
   hide() {

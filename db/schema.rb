@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_21_160630) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_29_105641) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -89,6 +89,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_21_160630) do
     t.datetime "updated_at", null: false
     t.index ["order_number"], name: "index_orders_on_order_number"
     t.index ["product_id"], name: "index_orders_on_product_id"
+  end
+
+  create_table "outbound_messages", force: :cascade do |t|
+    t.text "body", null: false
+    t.datetime "created_at", null: false
+    t.string "discord_channel_id", null: false
+    t.datetime "queued_at", null: false
+    t.datetime "sent_at"
+    t.datetime "updated_at", null: false
+    t.index ["discord_channel_id"], name: "index_outbound_messages_on_discord_channel_id"
   end
 
   create_table "products", force: :cascade do |t|

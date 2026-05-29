@@ -289,6 +289,27 @@
       return;
     }
 
+    if (m.kind === 'send_message') {
+      // Send a message via Discord's REST API using the page's session cookies.
+      // Runs in MAIN world so fetch() is credentialed automatically.
+      const { cmdId, channelId, body } = m.payload;
+      fetch(`https://discord.com/api/v9/channels/${channelId}/messages`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: body }),
+      }).then((res) => {
+        if (res.ok) {
+          post('cmd_ack', { cmdId, ok: true });
+        } else {
+          res.text().then((t) => post('cmd_ack', { cmdId, ok: false, error: `HTTP ${res.status}: ${t.slice(0, 200)}` }));
+        }
+      }).catch((e) => {
+        post('cmd_ack', { cmdId, ok: false, error: String(e).slice(0, 200) });
+      });
+      return;
+    }
+
     if (m.kind === 'selftest_emit') {
       // Synthetic frame for end-to-end hook test from the popup.
       const fake = {
